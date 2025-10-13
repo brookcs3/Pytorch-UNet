@@ -184,28 +184,8 @@ optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
 ## Adapting for Audio Separation
 
-This vanilla U-Net works well for audio (Spleeter uses similar architecture). Minor tweaks for optimization:
+This specifc U-net is for images. Changes will need to be made to have it be for audio 
 
-### Key Changes
-```python
-# 1. Input/output channels
-model = UNet(n_channels=1, n_classes=4)  # 1 spectrogram → 4 stems
-
-# 2. Output activation (for masks)
-return torch.sigmoid(self.conv(x))  # Bounds to [0,1]
-
-# 3. Loss function
-criterion = nn.L1Loss()  # Instead of CrossEntropyLoss
-```
-
-### Optional Optimizations
-
-| Component | Current | Audio Alternative | Why |
-|-----------|---------|-------------------|-----|
-| Activation | `ReLU` | `LeakyReLU(0.2)` | Handles negatives better |
-| Normalization | `BatchNorm2d` | `InstanceNorm2d` or `GroupNorm` | Better for variable lengths |
-| Downsampling | `MaxPool2d` | Strided `Conv2d` | Learnable |
-| Output | Raw logits | `sigmoid` or `relu` | Bounded masks |
 
 **Note:** Spleeter achieves excellent results with vanilla U-Net. Optimizations are refinements, not requirements.
 
