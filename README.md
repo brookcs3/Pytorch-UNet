@@ -22,15 +22,26 @@ A lightweight convolutional neural network for **semantic segmentation** (pixel-
 
 ## Installation
 
+### Windows / Mac / Linux
 ```bash
 cd /path/to/Pytorch-UNet
+
+# Install dependencies
 uv pip install -r requirements.txt
+
+# Install PyTorch
 uv pip install torch torchvision
+
+# Windows users with NVIDIA GPU: Install CUDA-enabled PyTorch
+# pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 ```
 
 **Requirements:** Python 3.11+, PyTorch 2.0+
 
-**Device priority:** MPS (Apple Silicon) → CUDA (NVIDIA) → CPU
+**GPU Support:**
+- **Windows/Linux with NVIDIA GPU:** CUDA (fastest)
+- **Mac with Apple Silicon:** MPS (Metal Performance Shaders)
+- **Fallback:** CPU (works everywhere, slower)
 
 ---
 
@@ -38,7 +49,11 @@ uv pip install torch torchvision
 
 ### Test Import & Model
 ```bash
+# Mac/Linux
 python3 -c "from unet import UNet; m = UNet(3, 2); print(f'✅ {sum(p.numel() for p in m.parameters()):,} parameters')"
+
+# Windows (use python instead of python3)
+python -c "from unet import UNet; m = UNet(3, 2); print(f'✅ {sum(p.numel() for p in m.parameters()):,} parameters')"
 ```
 
 ### Mini Training Example (Generates `.pth` file)
@@ -46,7 +61,15 @@ python3 -c "from unet import UNet; m = UNet(3, 2); print(f'✅ {sum(p.numel() fo
 import torch
 from unet import UNet
 
-device = torch.device('mps' if torch.backends.mps.is_available() else 'cpu')
+# Auto-detect best device (CUDA for NVIDIA GPUs, MPS for Mac, or CPU)
+if torch.cuda.is_available():
+    device = torch.device('cuda')
+elif torch.backends.mps.is_available():
+    device = torch.device('mps')
+else:
+    device = torch.device('cpu')
+print(f"Using device: {device}")
+
 model = UNet(n_channels=3, n_classes=2).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 criterion = torch.nn.CrossEntropyLoss()
@@ -67,12 +90,21 @@ for epoch in range(10):
 
 # Save trained model
 torch.save(model.state_dict(), "model.pth")
+print(f"✅ Model saved to model.pth")
 ```
 
 ### Load Trained Model
 ```python
+# Auto-detect device
+if torch.cuda.is_available():
+    device = torch.device('cuda')
+elif torch.backends.mps.is_available():
+    device = torch.device('mps')
+else:
+    device = torch.device('cpu')
+
 model = UNet(n_channels=3, n_classes=2).to(device)
-model.load_state_dict(torch.load("model.pth"))
+model.load_state_dict(torch.load("model.pth", map_location=device))
 model.eval()
 ```
 
@@ -89,12 +121,20 @@ data/
 
 **Training:**
 ```bash
+# Mac/Linux
 python3 train.py --epochs 10 --batch-size 2 --scale 0.5 --validation 20
+
+# Windows
+python train.py --epochs 10 --batch-size 2 --scale 0.5 --validation 20
 ```
 
 **Prediction:**
 ```bash
+# Mac/Linux
 python3 predict.py -i input.jpg -o output_mask.png
+
+# Windows
+python predict.py -i input.jpg -o output_mask.png
 ```
 
 ---
@@ -184,8 +224,36 @@ optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
 ## Adapting for Audio Separation
 
-This specifc U-net is for images. Changes will need to be made to have it be for audio 
+This vanilla U-Net works well for audio (Spleeter uses similar architecture). Minor tweaks for optimization:
 
+### Key Changes
+```python
+# 1. Input/output channels
+model = UNet(n_channels=1, n_classes=4)  # 1 spectrogram → 4 stems
+
+# 2. Device detection (works on all platforms)
+if torch.cuda.is_available():      # NVIDIA GPU (Windows/Linux)
+    device = torch.device('cuda')
+elif torch.backends.mps.is_available():  # Apple Silicon (Mac)
+    device = torch.device('mps')
+else:                               # CPU fallback
+    device = torch.device('cpu')
+
+# 3. Output activation (for masks)
+return torch.sigmoid(self.conv(x))  # Bounds to [0,1]
+
+# 4. Loss function
+criterion = nn.L1Loss()  # Instead of CrossEntropyLoss
+```
+
+### Optional Optimizations
+
+| Component | Current | Audio Alternative | Why |
+|-----------|---------|-------------------|-----|
+| Activation | `ReLU` | `LeakyReLU(0.2)` | Handles negatives better |
+| Normalization | `BatchNorm2d` | `InstanceNorm2d` or `GroupNorm` | Better for variable lengths |
+| Downsampling | `MaxPool2d` | Strided `Conv2d` | Learnable |
+| Output | Raw logits | `sigmoid` or `relu` | Bounded masks |
 
 **Note:** Spleeter achieves excellent results with vanilla U-Net. Optimizations are refinements, not requirements.
 
