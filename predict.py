@@ -85,7 +85,14 @@ if __name__ == '__main__':
 
     net = UNet(n_channels=3, n_classes=args.classes, bilinear=args.bilinear)
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # Device selection: prioritize MPS (Apple Silicon) > CUDA > CPU
+    if torch.backends.mps.is_available():
+        device = torch.device('mps')
+    elif torch.cuda.is_available():
+        device = torch.device('cuda')
+    else:
+        device = torch.device('cpu')
+
     logging.info(f'Loading model {args.model}')
     logging.info(f'Using device {device}')
 
