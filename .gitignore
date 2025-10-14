@@ -1,24 +1,10 @@
 *.pyc
-data/
 __pycache__/
-checkpoints/
 *.pth
 *.jpg
 venv/
 .idea/
 wandb/
 
-# Vocal separation outputs
-vocal_separation_sanity_check/output/
-vocal_separation_sanity_check/output_full/
-
-# User audio files (but keep README.md in process dirs)
-vocal_separation_sanity_check/process/100-window/*.wav
-vocal_separation_sanity_check/process/no-limit/*.wav
-
-# Generated images
-vocal_separation_sanity_check/*.png
-vocal_separation_sanity_check/output/*.png
-vocal_separation_sanity_check/output_full/*.png
 
 # NOTE: rtg/ directories ARE tracked in git so team has ready-to-go files
