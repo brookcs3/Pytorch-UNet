@@ -7,3 +7,17 @@ checkpoints/
 venv/
 .idea/
 wandb/
+
+# Vocal separation outputs
+vocal_separation_sanity_check/output/
+vocal_separation_sanity_check/output_full/
+
+# User audio files (but keep README.md in process dirs)
+vocal_separation_sanity_check/process/100-window/*.wav
+vocal_separation_sanity_check/process/no-limit/*.wav
+vocal_separation_sanity_check/*.wav
+
+# Generated images
+vocal_separation_sanity_check/*.png
+vocal_separation_sanity_check/output/*.png
+vocal_separation_sanity_check/output_full/*.png

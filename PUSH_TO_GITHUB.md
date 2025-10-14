@@ -49,26 +49,30 @@ cd pytorch-unet-vocal-separation
 # Install dependencies
 pip install torch torchvision numpy librosa soundfile scipy matplotlib
 
-# Try the vocal separation
+# Go to vocal separation directory
 cd vocal_separation_sanity_check
-pip install -r requirements.txt
 
-# Add their audio files
-# - isolated_vocal.wav (acapella)
-# - stereo_mixture.wav (full mix)
+# Add audio files to the right directory:
+# Option 1: Quick test (100 windows)
+#   Copy files to: process/100-window/
+#   Name them: yourfile_100-full.wav and yourfile_100-stem.wav
 
-# Or use the preparation script
-cd ..
-# Edit prepare_audio_files.py to point to their files
+# Option 2: Full song
+#   Copy files to: process/no-limit/
+#   Name them: yourfile_nl-full.wav and yourfile_nl-stem.wav
+
+# Prepare the files
 python prepare_audio_files.py
 
 # Run the sanity check
-cd vocal_separation_sanity_check
-python sanity_check_complete.py
+python sanity_check_complete.py       # for 100-window
+# OR
+python sanity_check_full_length.py    # for no-limit
 
 # Check output
-ls output/
-# Should see: extracted_vocal.wav
+ls output/          # for 100-window version
+# OR
+ls output_full/     # for no-limit version
 ```
 
 ## Quick Test
@@ -82,30 +86,47 @@ python test_setup.py
 
 Should see: `✓ ALL TESTS PASSED!`
 
-## What's Included
+## File Structure After Cloning
 
-After cloning, they get:
+```
+pytorch-unet-vocal-separation/
+├── README.md                           # Main overview
+├── PUSH_TO_GITHUB.md                   # This file
+├── AUDIO_SETUP_GUIDE.md                # Audio setup help
+│
+├── unet/                               # Core U-Net implementation
+│   ├── unet_model.py
+│   └── unet_parts.py
+│
+├── train.py
+├── predict.py
+├── evaluate.py
+│
+└── vocal_separation_sanity_check/
+    ├── README.md                       # Usage guide
+    ├── COMPLETE_DOC.md                 # Technical details
+    │
+    ├── process/                        # Users add files here
+    │   ├── 100-window/
+    │   │   └── README.md               # Instructions for this dir
+    │   └── no-limit/
+    │       └── README.md               # Instructions for this dir
+    │
+    ├── prepare_audio_files.py          # Processes user files
+    ├── sanity_check_complete.py        # 100-window version
+    ├── sanity_check_full_length.py     # No-limit version
+    └── test_setup.py                   # Verify installation
+```
 
-### Core U-Net
-- `unet/` - model code
-- `train.py` - training script
-- `predict.py` - inference
-- `evaluate.py` - evaluation
+## Workflow Summary
 
-### Vocal Separation Experiments
-- `vocal_separation_sanity_check/` - proof-of-concept code
-- `sanity_check.py` - phases 1-2 only
-- `sanity_check_complete.py` - full pipeline, short clip
-- `sanity_check_full_length.py` - full pipeline, entire song
-- `prepare_audio_files.py` - audio prep helper
-- `test_setup.py` - dependency checker
-- `README.md` - usage guide
-- `COMPLETE_DOC.md` - technical details
-
-### Docs
-- `README.md` - main readme
-- `AUDIO_SETUP_GUIDE.md` - audio file setup
-- `vocal_separation_sanity_check/README.md` - sanity check guide
+1. Clone repo
+2. Install dependencies
+3. Add audio files to `process/100-window/` or `process/no-limit/`
+4. Name files correctly (`*_100-full.wav` + `*_100-stem.wav` OR `*_nl-full.wav` + `*_nl-stem.wav`)
+5. Run `prepare_audio_files.py`
+6. Run appropriate sanity check script
+7. Check `output/` or `output_full/` for results
 
 ## Common Issues
 
@@ -114,6 +135,9 @@ After cloning, they get:
 
 **"Already exists" error**
 → The repo already has commits, use `git pull origin main` first
+
+**"NO FILES FOUND" when running prepare script**
+→ Files are in wrong directory or not named correctly. Check the README in the process directory.
 
 **Audio files in repo**
 → They're gitignored, which is correct. Each user adds their own audio files.
@@ -139,3 +163,4 @@ git pull
 - Audio files (`.wav`) are gitignored - users supply their own
 - Output directories are gitignored - generated locally
 - Model checkpoints (`.pth`) are gitignored - too large for git
+- README files in process directories ARE tracked (to help users)

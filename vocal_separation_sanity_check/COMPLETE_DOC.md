@@ -4,7 +4,7 @@ Just documenting everything about this experiment in case I need to reference it
 
 ## What This Is
 
-Trying to separate vocals from a mix without training a neural network. Just want to see if the core approach works before spending days training a U-Net.
+Trying to separate vocals from a mix without training a neural network. Just want to see if the core approach works.
 
 The idea: create a super detailed "fingerprint" of what the vocal looks like (765,000 measurements), then adjust the mixture until its fingerprint matches. If that works even a little, then training a U-Net should work way better.
 

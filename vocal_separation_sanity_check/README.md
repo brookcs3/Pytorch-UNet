@@ -20,51 +20,66 @@ This is the manual proof-of-concept version. Takes a few minutes to process a so
 
 If the fingerprint is unique enough, the only way the mixture can match it is to actually sound like the vocal.
 
-## The 18 Slices
-
-Different conv2d filters to catch different patterns:
-
-- slice_0: raw magnitude (baseline)
-- slice_1-8: basic patterns (horizontal/vertical/diagonal/blob/harmonic/edge detection)
-- slice_9-15: oriented edge detectors at different angles (22.5°, 45°, 67.5°, etc)
-- slice_16-18: laplacian and pooled versions
-
-Vocals have specific patterns - sustained frequencies, harmonic stacks, mid-range energy, formants. These 18 views capture that.
-
 ## Setup
 
 Need these:
 ```bash
-uv pip install numpy librosa soundfile scipy matplotlib
+pip install numpy librosa soundfile scipy matplotlib
 ```
 
-You'll need two audio files:
-- `isolated_vocal.wav` - acapella or isolated vocal track
-- `stereo_mixture.wav` - the full song with everything
+## Adding Your Audio Files
 
-Just drop them in this directory.
+### Option 1: Quick Test (100 windows, ~4.7 seconds)
 
-## Running It
+1. Put your files in `process/100-window/`:
+   ```
+   process/100-window/
+   ├── yourfile_100-full.wav    (full mixture with everything)
+   └── yourfile_100-stem.wav    (isolated vocal/acapella)
+   ```
 
-Three versions depending on what you want:
+2. Run preparation:
+   ```bash
+   python prepare_audio_files.py
+   ```
 
-### Quick test (4.7 seconds, ~100 windows)
-```bash
-python sanity_check_complete.py
-```
-Takes about 3 minutes. Good for testing if it works at all.
+3. Run sanity check:
+   ```bash
+   python sanity_check_complete.py
+   ```
 
-### Full song
-```bash
-python sanity_check_full_length.py
-```
-Processes the entire audio file. Takes longer obviously - maybe 30-50 minutes for a 3 minute song. Outputs to `output_full/` so it doesn't conflict with the test version.
+### Option 2: Full Song (entire audio, no time limit)
 
-### Just analysis (no audio output)
-```bash
-python sanity_check.py
-```
-This one only does phases 1-2 (fingerprint creation and comparison). Doesn't actually generate audio. Useful for debugging.
+1. Put your files in `process/no-limit/`:
+   ```
+   process/no-limit/
+   ├── yourfile_nl-full.wav     (full mixture with everything)
+   └── yourfile_nl-stem.wav     (isolated vocal/acapella)
+   ```
+
+2. Run preparation:
+   ```bash
+   python prepare_audio_files.py
+   ```
+
+3. Run sanity check:
+   ```bash
+   python sanity_check_full_length.py
+   ```
+
+### File Naming Rules
+
+**For 100-window version:**
+- Full mix must end with `_100-full.wav`
+- Isolated vocal must end with `_100-stem.wav`
+- Example: `song_100-full.wav`, `song_100-stem.wav`
+
+**For no-limit version:**
+- Full mix must end with `_nl-full.wav`
+- Isolated vocal must end with `_nl-stem.wav`
+- Example: `track_nl-full.wav`, `track_nl-stem.wav`
+
+The script will find them automatically based on these suffixes.
 
 ## What You Get
 
@@ -80,6 +95,17 @@ output/
 ```
 
 Full-length version puts everything in `output_full/` instead.
+
+## The 18 Slices
+
+Different conv2d filters to catch different patterns:
+
+- slice_0: raw magnitude (baseline)
+- slice_1-8: basic patterns (horizontal/vertical/diagonal/blob/harmonic/edge detection)
+- slice_9-15: oriented edge detectors at different angles (22.5°, 45°, 67.5°, etc)
+- slice_16-18: laplacian and pooled versions
+
+Vocals have specific patterns - sustained frequencies, harmonic stacks, mid-range energy, formants. These 18 views capture that.
 
 ## Expected Results
 
@@ -122,19 +148,37 @@ With 18 slices and ~100 windows per slice, that's around 765,000 data points des
 - `test_setup.py` - verify everything is installed correctly
 - `requirements.txt` - dependencies
 
+## Workflow Summary
+
+```
+1. Add your audio files to process/100-window/ or process/no-limit/
+   (name them correctly: *_100-full.wav + *_100-stem.wav OR *_nl-full.wav + *_nl-stem.wav)
+
+2. Run: python prepare_audio_files.py
+   (converts and moves files to the right place)
+
+3. Run: python sanity_check_complete.py (for 100-window)
+   OR:  python sanity_check_full_length.py (for no-limit)
+
+4. Check output/ or output_full/ for results
+```
+
 ## Troubleshooting
 
+**"NO FILES FOUND"**
+Make sure your files end with the right suffixes and are in the right directory.
+
 **"FileNotFoundError"**
-Run `prepare_audio_files.py` first. It'll convert your audio files and put them in the right place.
+Run `prepare_audio_files.py` first.
 
 **Takes forever**
-Use the complete version instead of full-length. Or reduce the number of iterations in the config.
+Use the 100-window version instead of no-limit. Or reduce iterations in the config.
 
 **Out of memory**
 Reduce n_fft from 2048 to 1024 in the config.
 
 **Results sound terrible**
-Make sure your input files are correct. The "Full" file should be the complete mix, and the "Acapella" file should be just the vocal. If they're swapped or wrong, it won't work.
+Make sure your files are correct. The "full" file should be the complete mix with everything. The "stem" file should be just the isolated vocal. If they're swapped or wrong, it won't work.
 
 ## What This Proves
 
@@ -157,8 +201,3 @@ Assuming this works:
 
 The trained model should be way better (95%+ quality) and way faster (10ms vs minutes).
 
-## Notes
-
-This is not production-ready. It's a proof of concept. For actual vocal separation use Spleeter or Demucs or something.
-
-The point is to understand what's actually happening before throwing a neural network at it. Makes the architecture decisions way more informed.

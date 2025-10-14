@@ -6,6 +6,16 @@ Old U-Net implementation from the 2017 Kaggle Carvana Image Masking Challenge. S
 
 ---
 
+## Documentation
+
+- **Main README** - This file (overview)
+- **[Vocal Separation Guide](vocal_separation_sanity_check/README.md)** - How to use the vocal separation experiments
+- **[Technical Details](vocal_separation_sanity_check/COMPLETE_DOC.md)** - Deep dive into how it works
+- **[Audio Setup Guide](AUDIO_SETUP_GUIDE.md)** - Help with audio file preparation
+- **[Push to GitHub](PUSH_TO_GITHUB.md)** - Instructions for sharing this repo
+
+---
+
 ## What's in Here
 
 ### U-Net Implementation
@@ -18,7 +28,19 @@ Experiments in `vocal_separation_sanity_check/` directory. Trying to manually se
 
 Gets about 70-80% quality with manual spectral fingerprinting. If that works, then training a U-Net should get to 95%+ automatically.
 
-See `vocal_separation_sanity_check/README.md` for details.
+**Quick start:**
+```bash
+cd vocal_separation_sanity_check
+
+# Add your audio files to process/100-window/:
+#   yourfile_100-full.wav (full mix)
+#   yourfile_100-stem.wav (vocal only)
+
+python prepare_audio_files.py
+python sanity_check_complete.py
+```
+
+See [vocal_separation_sanity_check/README.md](vocal_separation_sanity_check/README.md) for details.
 
 ---
 
@@ -42,17 +64,20 @@ print(f"Model has {sum(p.numel() for p in model.parameters()):,} parameters")
 
 ```bash
 cd vocal_separation_sanity_check
-pip install -r requirements.txt
 
-# Add your audio files:
-# - isolated_vocal.wav (acapella)
-# - stereo_mixture.wav (full mix)
+# Add your files to the right directory:
+# - For quick test: process/100-window/yourfile_100-full.wav and yourfile_100-stem.wav
+# - For full song: process/no-limit/yourfile_nl-full.wav and yourfile_nl-stem.wav
 
-# Run the sanity check
-python sanity_check_complete.py
+python prepare_audio_files.py
+
+# Then run:
+python sanity_check_complete.py        # for 100-window version
+# OR
+python sanity_check_full_length.py     # for no-limit version
 ```
 
-Outputs separated vocal to `output/extracted_vocal.wav`.
+Outputs separated vocal to `output/extracted_vocal.wav` or `output_full/extracted_vocal_full.wav`.
 
 ---
 
@@ -125,8 +150,16 @@ else:
 
 ### Vocal Separation
 - `vocal_separation_sanity_check/` - proof-of-concept experiments
-- `prepare_audio_files.py` - audio file preparation helper
+  - `process/100-window/` - place your files here for quick test
+  - `process/no-limit/` - place your files here for full song
+  - `prepare_audio_files.py` - processes and moves your files
+  - `sanity_check_complete.py` - runs 100-window version
+  - `sanity_check_full_length.py` - runs full-song version
+  - `test_setup.py` - verify installation
+  - `README.md` - detailed usage guide
+  - `COMPLETE_DOC.md` - technical deep dive
 - `AUDIO_SETUP_GUIDE.md` - guide for setting up audio files
+- `PUSH_TO_GITHUB.md` - sharing instructions
 
 ---
 
@@ -146,11 +179,7 @@ Then train U-Net to do it automatically in 10ms at 95%+ quality.
 
 ---
 
-## Known Issues
-
-- AMP (mixed precision) only works on CUDA, not MPS
-- Pin memory warnings on MPS (safe to ignore, PyTorch limitation)
-- Channels-last format limited on older PyTorch + MPS
+- 
 
 ---
 
