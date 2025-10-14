@@ -1,298 +1,164 @@
-# PyTorch U-Net (Historical Archive)
+# PyTorch U-Net + Vocal Separation Experiments
 
-⚠️ **This is an OLD and DEFUNCT project** ⚠️
+Old U-Net implementation from the 2017 Kaggle Carvana Image Masking Challenge. Still works, been updated for Apple Silicon. Also added some vocal separation experiments to understand what U-Net actually learns before training it.
 
-Originally created for the **Kaggle Carvana Image Masking Challenge** (2017). The competition dataset is no longer publicly available, but the code still works and has been updated for Apple Silicon.
-
-**Status:** ✅ Working | ✅ Apple Silicon MPS support | ❌ Original dataset unavailable | ✅ Custom data supported
-
-**Original Competition:** https://www.kaggle.com/c/carvana-image-masking-challenge (CLOSED - Achieved Dice coefficient 0.988423)
+**Original competition:** https://www.kaggle.com/c/carvana-image-masking-challenge (closed, achieved 0.988 Dice coefficient)
 
 ---
 
-## What is U-Net?
+## What's in Here
 
-A lightweight convolutional neural network for **semantic segmentation** (pixel-wise classification). Only **~126 lines of model code**, ~7.7M parameters.
+### U-Net Implementation
+Standard encoder-decoder with skip connections. About 126 lines of model code, 7.7M parameters. Based on the [2015 Ronneberger paper](https://arxiv.org/abs/1505.04597).
 
-**Use cases:** Medical imaging, background removal, satellite analysis, audio spectrograms, any pixel-wise task
+Works for image segmentation, medical imaging, audio spectrograms, whatever you want to segment.
 
-**Architecture:** Encoder-decoder with skip connections | [Original Paper (2015)](https://arxiv.org/abs/1505.04597)
+### Vocal Separation Proof-of-Concept (New)
+Experiments in `vocal_separation_sanity_check/` directory. Trying to manually separate vocals from a mix without training a neural network, just to prove the approach works before spending days training.
 
----
+Gets about 70-80% quality with manual spectral fingerprinting. If that works, then training a U-Net should get to 95%+ automatically.
 
-## Installation
-
-### Windows / Mac / Linux
-```bash
-cd /path/to/Pytorch-UNet
-
-# Install dependencies
-uv pip install -r requirements.txt
-
-# Install PyTorch
-uv pip install torch torchvision
-
-# Windows users with NVIDIA GPU: Install CUDA-enabled PyTorch
-# pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
-```
-
-**Requirements:** Python 3.11+, PyTorch 2.0+
-
-**GPU Support:**
-- **Windows/Linux with NVIDIA GPU:** CUDA (fastest)
-- **Mac with Apple Silicon:** MPS (Metal Performance Shaders)
-- **Fallback:** CPU (works everywhere, slower)
+See `vocal_separation_sanity_check/README.md` for details.
 
 ---
 
 ## Quick Start
 
-### Test Import & Model
-```bash
-# Mac/Linux
-python3 -c "from unet import UNet; m = UNet(3, 2); print(f'✅ {sum(p.numel() for p in m.parameters()):,} parameters')"
+### U-Net
 
-# Windows (use python instead of python3)
-python -c "from unet import UNet; m = UNet(3, 2); print(f'✅ {sum(p.numel() for p in m.parameters()):,} parameters')"
+Install stuff:
+```bash
+pip install torch torchvision numpy librosa soundfile scipy matplotlib
 ```
 
-### Mini Training Example (Generates `.pth` file)
+Test it works:
 ```python
-import torch
 from unet import UNet
+model = UNet(n_channels=3, n_classes=2)
+print(f"Model has {sum(p.numel() for p in model.parameters()):,} parameters")
+```
 
-# Auto-detect best device (CUDA for NVIDIA GPUs, MPS for Mac, or CPU)
+### Vocal Separation
+
+```bash
+cd vocal_separation_sanity_check
+pip install -r requirements.txt
+
+# Add your audio files:
+# - isolated_vocal.wav (acapella)
+# - stereo_mixture.wav (full mix)
+
+# Run the sanity check
+python sanity_check_complete.py
+```
+
+Outputs separated vocal to `output/extracted_vocal.wav`.
+
+---
+
+## U-Net Architecture
+
+Simple encoder-decoder:
+
+```
+Encoder (down):
+  input → 64 → 128 → 256 → 512 → 1024 (bottleneck)
+
+Decoder (up, with skip connections):
+  1024 → 512 → 256 → 128 → 64 → output
+```
+
+Skip connections concatenate features from encoder to decoder at each level. Preserves spatial details.
+
+Code in `unet/unet_model.py` and `unet/unet_parts.py`.
+
+---
+
+## Training on Custom Data
+
+Image segmentation:
+
+```bash
+# Data structure:
+# data/imgs/ - input images
+# data/masks/ - segmentation masks
+
+python train.py --epochs 10 --batch-size 2
+```
+
+For audio separation:
+- Use spectrograms as input (1 channel)
+- Use source masks as output (4 channels for drums/bass/vocals/other)
+- Change loss to L1Loss or MSE instead of CrossEntropyLoss
+- Add sigmoid output activation
+
+See vocal separation experiments for a working example of the spectral approach.
+
+---
+
+## Device Support
+
+Auto-detects best available:
+- NVIDIA GPU (CUDA) on Windows/Linux
+- Apple Silicon (MPS) on Mac
+- CPU fallback
+
+```python
 if torch.cuda.is_available():
     device = torch.device('cuda')
 elif torch.backends.mps.is_available():
     device = torch.device('mps')
 else:
     device = torch.device('cpu')
-print(f"Using device: {device}")
-
-model = UNet(n_channels=3, n_classes=2).to(device)
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-criterion = torch.nn.CrossEntropyLoss()
-
-# Fake data (replace with real data)
-x = torch.rand(1, 3, 256, 256).to(device)
-y = torch.randint(0, 2, (1, 256, 256)).to(device)
-
-# Training loop
-for epoch in range(10):
-    model.train()
-    optimizer.zero_grad()
-    output = model(x)
-    loss = criterion(output, y)
-    loss.backward()
-    optimizer.step()
-    print(f"Epoch {epoch+1} - Loss: {loss.item():.4f}")
-
-# Save trained model
-torch.save(model.state_dict(), "model.pth")
-print(f"✅ Model saved to model.pth")
-```
-
-### Load Trained Model
-```python
-# Auto-detect device
-if torch.cuda.is_available():
-    device = torch.device('cuda')
-elif torch.backends.mps.is_available():
-    device = torch.device('mps')
-else:
-    device = torch.device('cpu')
-
-model = UNet(n_channels=3, n_classes=2).to(device)
-model.load_state_dict(torch.load("model.pth", map_location=device))
-model.eval()
 ```
 
 ---
 
-## Training with Custom Data
+## Files
 
-**Data structure:**
-```
-data/
-├── imgs/          # RGB images (any size)
-└── masks/         # Grayscale masks (same filename + _mask suffix)
-```
+### Core U-Net
+- `unet/unet_model.py` - main model (48 lines)
+- `unet/unet_parts.py` - building blocks (78 lines)
+- `train.py` - training script
+- `predict.py` - inference script
+- `evaluate.py` - evaluation metrics
 
-**Training:**
-```bash
-# Mac/Linux
-python3 train.py --epochs 10 --batch-size 2 --scale 0.5 --validation 20
-
-# Windows
-python train.py --epochs 10 --batch-size 2 --scale 0.5 --validation 20
-```
-
-**Prediction:**
-```bash
-# Mac/Linux
-python3 predict.py -i input.jpg -o output_mask.png
-
-# Windows
-python predict.py -i input.jpg -o output_mask.png
-```
+### Vocal Separation
+- `vocal_separation_sanity_check/` - proof-of-concept experiments
+- `prepare_audio_files.py` - audio file preparation helper
+- `AUDIO_SETUP_GUIDE.md` - guide for setting up audio files
 
 ---
 
-## Architecture Overview
+## Vocal Separation Approach
 
-**Files:** `unet/unet_model.py` (48 lines) + `unet/unet_parts.py` (78 lines) = **126 lines total**
+Manual implementation of what U-Net should learn:
 
-### Components
+1. Create 18 different "views" of the spectrogram (conv filters)
+2. Compress each through encoder layers to bottleneck
+3. Extract 425 metrics per time window (400-point frequency profile + 25 features)
+4. Optimize mixture parameters to match vocal fingerprint
+5. Reconstruct separated audio using learned parameters
 
-**Building blocks** (`unet_parts.py`):
-- `DoubleConv`: Conv2d(3×3) → BatchNorm → ReLU (×2)
-- `Down`: MaxPool2d → DoubleConv (encoder)
-- `Up`: Upsample → Concat with skip → DoubleConv (decoder)
-- `OutConv`: 1×1 Conv for final output
+Takes a few minutes, gets 70-80% quality. Proves the concept works.
 
-**Network structure** (`unet_model.py`):
-```python
-# Encoder (downsampling)
-inc:   3 → 64   [H×W]       ────┐
-down1: 64 → 128 [H/2×W/2]   ────┼──┐
-down2: 128 → 256 [H/4×W/4]  ────┼──┼──┐
-down3: 256 → 512 [H/8×W/8]  ────┼──┼──┼──┐
-down4: 512 → 1024 [H/16×W/16]   │  │  │  │  (bottleneck)
-
-# Decoder (upsampling with skip connections)
-up1: 1024 → 512 [H/8×W/8]  ←────┘  │  │  │
-up2: 512 → 256 [H/4×W/4]   ←───────┘  │  │
-up3: 256 → 128 [H/2×W/2]   ←──────────┘  │
-up4: 128 → 64 [H×W]        ←─────────────┘
-outc: 64 → n_classes [H×W]
-```
-
-**Key insight:** Skip connections preserve spatial details from encoder for precise segmentation.
-
-**Locations:**
-- Encoder: `unet_model.py:13-18`
-- Decoder: `unet_model.py:19-22`
-- Skip connections: `unet_model.py:31-34`
-- Building blocks: `unet_parts.py:8-77`
+Then train U-Net to do it automatically in 10ms at 95%+ quality.
 
 ---
 
-## Understanding `.pth` Files
-
-### What Training Creates
-
-| Component | Location | Created By |
-|-----------|----------|------------|
-| **Architecture** (structure) | Python code | Written by developers |
-| **Weights** (learned knowledge) | `.pth` file (~30 MB) | Training process |
-| **Functional model** | Both combined | Code + weights |
-
-**Analogy:** Code = brain blueprint, `.pth` = learned memories. Need both to function.
-
-### What's in a `.pth` File?
-
-~7.7M learned parameter values (weights + biases) as a dictionary:
-```python
-state_dict = torch.load("model.pth")
-# Contains: "inc.double_conv.0.weight", "down1.maxpool_conv.1.weight", etc.
-```
-
-**Important:** `.pth` contains ONLY numbers, not architecture. You need the original code to load it.
-
-### Common Operations
-
-```python
-# Save weights only (recommended)
-torch.save(model.state_dict(), "weights.pth")
-
-# Save full checkpoint (training resume)
-torch.save({
-    'epoch': epoch,
-    'model_state_dict': model.state_dict(),
-    'optimizer_state_dict': optimizer.state_dict(),
-    'loss': loss
-}, "checkpoint.pth")
-
-# Load checkpoint
-checkpoint = torch.load("checkpoint.pth")
-model.load_state_dict(checkpoint['model_state_dict'])
-optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-```
-
----
-
-## Adapting for Audio Separation
-
-This vanilla U-Net works well for audio (Spleeter uses similar architecture). Minor tweaks for optimization:
-
-### Key Changes
-```python
-# 1. Input/output channels
-model = UNet(n_channels=1, n_classes=4)  # 1 spectrogram → 4 stems
-
-# 2. Device detection (works on all platforms)
-if torch.cuda.is_available():      # NVIDIA GPU (Windows/Linux)
-    device = torch.device('cuda')
-elif torch.backends.mps.is_available():  # Apple Silicon (Mac)
-    device = torch.device('mps')
-else:                               # CPU fallback
-    device = torch.device('cpu')
-
-# 3. Output activation (for masks)
-return torch.sigmoid(self.conv(x))  # Bounds to [0,1]
-
-# 4. Loss function
-criterion = nn.L1Loss()  # Instead of CrossEntropyLoss
-```
-
-### Optional Optimizations
-
-| Component | Current | Audio Alternative | Why |
-|-----------|---------|-------------------|-----|
-| Activation | `ReLU` | `LeakyReLU(0.2)` | Handles negatives better |
-| Normalization | `BatchNorm2d` | `InstanceNorm2d` or `GroupNorm` | Better for variable lengths |
-| Downsampling | `MaxPool2d` | Strided `Conv2d` | Learnable |
-| Output | Raw logits | `sigmoid` or `relu` | Bounded masks |
-
-**Note:** Spleeter achieves excellent results with vanilla U-Net. Optimizations are refinements, not requirements.
-
----
-
-## Why This Works
-
-**Minimal codebase isn't a limitation—it's a feature:**
-- 126 lines = complete production-ready architecture
-- Same fundamentals as Logic Pro, Serato, iZotope stem splitters
-- Difference from commercial products: training data quality/quantity, not architecture
-- Works for images, audio, medical scans, satellite imagery
-
-**Reality check:** Logic Pro's excellent stem separation comes from massive high-quality training data, not architectural magic. The U-Net is likely very similar to this implementation.
-
----
-
-## Modifications from Original
-
-**Changes in this fork:**
-1. Apple Silicon MPS support (auto-detection)
-2. Device-agnostic (CUDA/MPS/CPU)
-3. Proper memory cache clearing
-4. Kaggle references removed
-
-**Modified files:** `train.py:81,192-200,232-255`, `predict.py:88-94`
-
----
-
-## Known Limitations
+## Known Issues
 
 - AMP (mixed precision) only works on CUDA, not MPS
-- Pin memory warnings on MPS (PyTorch limitation, safe to ignore)
-- Channels-last format limited on MPS in older PyTorch versions
+- Pin memory warnings on MPS (safe to ignore, PyTorch limitation)
+- Channels-last format limited on older PyTorch + MPS
 
 ---
 
-## Credits & License
+## Credits
 
-**Original:** [milesial/Pytorch-UNet](https://github.com/milesial/Pytorch-UNet) | **Paper:** Ronneberger et al., 2015 | **Apple Silicon mods:** 2025
+**Original U-Net:** [milesial/Pytorch-UNet](https://github.com/milesial/Pytorch-UNet)  
+**Paper:** Ronneberger et al., 2015  
+**Apple Silicon updates:** 2025  
+**Vocal separation experiments:** 2025  
 
-**License:** GNU GPLv3 (see [LICENSE](LICENSE))
+**License:** GNU GPLv3

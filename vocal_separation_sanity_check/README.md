@@ -1,236 +1,164 @@
 # Vocal Separation Sanity Check
 
-## What This Proves
+Trying to prove that you can separate vocals from a mix without actually training a neural network. Just wanted to see if the core idea works before spending days training a U-Net.
 
-This sanity check demonstrates that **multi-scale spectral fingerprinting can separate vocals from a mixture WITHOUT neural network training**. It proves the fundamental principle that U-Net learns automatically.
+## The Idea
 
-## The Concept
+Basically: if I can manually extract a vocal by creating a unique enough "fingerprint" of what a vocal looks like across 18 different views of the spectrogram, then a U-Net should be able to learn to do the same thing automatically (and way faster).
 
-### What We Do Manually:
-1. **Explode** the vocal: Create 18 different "views" (slices) of the spectrogram
-2. **Compress** each slice: Process through encoder layers to bottleneck
-3. **Extract** metrics: 400-point frequency profile + 25 derived features
-4. **Compare**: Match mixture fingerprint to vocal fingerprint
-5. **Optimize**: Adjust mixture parameters to match
-6. **Reconstruct**: Use decoder to rebuild separated vocal
+This is the manual proof-of-concept version. Takes a few minutes to process a song, gets maybe 70-80% quality. But if this works at all, then training a U-Net on thousands of examples should get us to 95%+ and do it in 10ms instead of minutes.
 
-### What U-Net Learns:
-**The exact same process**, but:
-- ✓ Learns optimal filters (not hand-designed)
-- ✓ Learns optimal features (not manual metrics)
-- ✓ Learns optimal reconstruction
-- ✓ Trained on thousands of songs
-- ✓ Fast (10ms vs minutes)
+## How It Works
+
+1. Take the isolated vocal and the full mix
+2. Create 18 different "slices" of each spectrogram (different conv filters basically - horizontal lines, vertical lines, diagonals, edges, etc)
+3. Run each slice through 4 encoder layers to compress it down to a bottleneck
+4. At the bottleneck, extract a ton of metrics - 400-point frequency profile plus 25 other features
+5. Now you have ~765,000 unique measurements describing the vocal
+6. Try to adjust the mixture's spectrogram until its fingerprint matches the vocal's
+7. Apply those adjustments, convert back to audio
+
+If the fingerprint is unique enough, the only way the mixture can match it is to actually sound like the vocal.
 
 ## The 18 Slices
 
-| Slice | Name | What It Detects |
-|-------|------|-----------------|
-| 0 | `slice_0_raw` | Raw frequency content |
-| 1 | `slice_1_horizontal` | Sustained frequencies |
-| 2 | `slice_2_vertical` | Onsets/offsets |
-| 3 | `slice_3_diagonal_up` | Pitch rising |
-| 4 | `slice_4_diagonal_down` | Pitch falling |
-| 5 | `slice_5_blob` | Localized energy |
-| 6 | `slice_6_harmonic` | Harmonic stacks |
-| 7 | `slice_7_highpass` | Transients |
-| 8 | `slice_8_lowpass` | Smooth regions |
-| 9-15 | `slice_X_edge_Ydeg` | Oriented patterns |
-| 16 | `slice_16_laplacian` | All edges |
-| 17 | `slice_17_maxpool` | Coarse dominant features |
-| 18 | `slice_18_avgpool` | Coarse smoothed features |
+Different conv2d filters to catch different patterns:
 
-## The Fingerprint
+- slice_0: raw magnitude (baseline)
+- slice_1-8: basic patterns (horizontal/vertical/diagonal/blob/harmonic/edge detection)
+- slice_9-15: oriented edge detectors at different angles (22.5°, 45°, 67.5°, etc)
+- slice_16-18: laplacian and pooled versions
 
-### Per Window Metrics (425 total):
-
-**1. Core (400 metrics):**
-- 400-point frequency profile (0-20kHz at 50 Hz resolution)
-- Like a 400-band graphic EQ readout
-
-**2. Band Energies (6 metrics):**
-- bass, low_mid, mid, high_mid, presence, high
-
-**3. Spectral Shape (6 metrics):**
-- centroid, spread, rolloff, flatness, slope, crest
-
-**4. Harmonic Structure (5 metrics):**
-- fundamental, num_harmonics, spacing, strength, deviation
-
-**5. Formants (4 metrics):**
-- formant_1, formant_2, formant_3, strength
-
-**6. Dynamics (4 metrics):**
-- peak_to_rms, energy_concentration, entropy, total_energy
-
-### Total Fingerprint:
-```
-18 slices × ~100 windows × 425 metrics = ~765,000 data points
-```
+Vocals have specific patterns - sustained frequencies, harmonic stacks, mid-range energy, formants. These 18 views capture that.
 
 ## Setup
 
-### Requirements:
+Need these:
 ```bash
-pip install numpy librosa soundfile scipy matplotlib
+uv pip install numpy librosa soundfile scipy matplotlib
 ```
 
-### Audio Files Needed:
-Place these files in the same directory as `sanity_check.py`:
-- `isolated_vocal.wav` - Clean isolated vocal track
-- `stereo_mixture.wav` - Full song with vocals, drums, bass, etc.
+You'll need two audio files:
+- `isolated_vocal.wav` - acapella or isolated vocal track
+- `stereo_mixture.wav` - the full song with everything
 
-## Usage
+Just drop them in this directory.
 
-### Run the Sanity Check:
+## Running It
+
+Three versions depending on what you want:
+
+### Quick test (4.7 seconds, ~100 windows)
+```bash
+python sanity_check_complete.py
+```
+Takes about 3 minutes. Good for testing if it works at all.
+
+### Full song
+```bash
+python sanity_check_full_length.py
+```
+Processes the entire audio file. Takes longer obviously - maybe 30-50 minutes for a 3 minute song. Outputs to `output_full/` so it doesn't conflict with the test version.
+
+### Just analysis (no audio output)
 ```bash
 python sanity_check.py
 ```
+This one only does phases 1-2 (fingerprint creation and comparison). Doesn't actually generate audio. Useful for debugging.
 
-### Expected Output:
-```
-PHASE 1: LOAD AND ANALYZE
-  ✓ Created 18 slices, 1,800 total windows
-  ✓ Total metrics: 765,000
+## What You Get
 
-PHASE 2: COMPARE FINGERPRINTS
-  Window 0 comparison:
-    Vocal mid_energy: 8.234
-    Mixture mid_energy: 15.678
-    (shows differences that need to be matched)
-
-✓ Fingerprints created
-```
-
-## What Success Looks Like
-
-### We're NOT expecting:
-- ✗ Perfect studio-quality isolation
-- ✗ Zero artifacts
-- ✗ Zero instrument bleed
-
-### We ARE expecting:
-- ✓ Vocal clearly audible in extracted audio
-- ✓ Drums/bass significantly reduced
-- ✓ Vocal timbre mostly preserved
-- ✓ 70-80% quality separation
-
-**This proves the concept works!** Then U-Net can learn to do it better (95%+ quality).
-
-## Implementation Status
-
-### ✅ Completed:
-- [x] Load audio files
-- [x] Create STFT spectrograms
-- [x] Create 18 different slices
-- [x] Compress to bottleneck (4 layers)
-- [x] Extract 425 metrics per window
-- [x] Compare fingerprints
-
-### 🚧 Next Steps:
-- [ ] Optimization loop (match mixture to vocal)
-- [ ] Decoder reconstruction
-- [ ] Audio conversion (ISTFT)
-- [ ] Evaluation metrics
-- [ ] Visualization
-
-## File Structure
+After running complete version:
 
 ```
-vocal_separation_sanity_check/
-├── sanity_check.py          # Main script
-├── README.md                # This file
-├── isolated_vocal.wav       # Input: clean vocal
-├── stereo_mixture.wav       # Input: full mix
-└── output/                  # Generated results
-    ├── extracted_vocal.wav  # Output: separated vocal
-    ├── comparison.png       # Spectrograms
-    └── metrics.txt          # Evaluation
+output/
+├── extracted_vocal.wav              # the separated vocal
+├── 1_original_mixture.wav           # copy of input for comparison
+├── 2_target_vocal.wav               # copy of target for comparison
+├── optimization_loss.png            # shows the learning curve
+└── spectrograms.png                 # visual comparison
 ```
 
-## Understanding the Output
+Full-length version puts everything in `output_full/` instead.
 
-### Fingerprint Comparison:
-When you see output like:
-```
-Vocal mid_energy: 8.234
-Mixture mid_energy: 15.678
-```
+## Expected Results
 
-This means:
-- Vocal has less mid-range energy (isolated)
-- Mixture has more (other instruments present)
-- Goal: Adjust mixture to match vocal's 8.234
+Not expecting perfection. This is a proof of concept.
 
-### Why 765,000 Data Points?
-```
-18 slices: Different pattern detectors
-× 100 windows: Every 46ms of audio
-× 425 metrics: Deep frequency analysis
-= 765,000 unique measurements
+**Should work:**
+- Vocal is audible and mostly clear
+- Drums are way quieter
+- Bass is way quieter
+- You can tell it's the vocal
 
-This creates a fingerprint so unique that only
-the actual vocal can match all these points.
-```
+**Won't work:**
+- Studio-quality isolation
+- Zero artifacts (there will be some clicking/phasing)
+- Complete removal of all other instruments
+- Perfect timbre preservation
 
-## The Bridge to U-Net
+If we hit 70-80% quality, that proves the concept. Then U-Net training should get us to 95%+.
 
-### Sanity Check (This):
-- Proves concept manually
-- Hand-designed features
-- Single song optimization
-- ~5 minutes processing
-- 70-80% quality
+## The Fingerprint
 
-### U-Net (Next):
-- Learns from sanity check
-- Learns optimal features
-- Generalizes to any song
-- ~10ms processing
-- 95%+ quality
+Each time window (every ~46ms) gets:
+- 400-point frequency profile (energy at 0Hz, 50Hz, 100Hz, ... 20kHz)
+- 6 band energies (bass, low-mid, mid, high-mid, presence, high)
+- 6 spectral shape metrics (centroid, spread, rolloff, flatness, slope, crest)
+- 5 harmonic features (fundamental freq, num harmonics, spacing, strength, etc)
+- 4 formant measurements
+- 4 dynamics measurements
 
-**Same principle, but automated and optimized through training.**
+= 425 metrics per window
 
-## Key Insights
+With 18 slices and ~100 windows per slice, that's around 765,000 data points describing the vocal. Should be unique enough that only the actual vocal matches.
 
-### 1. No Magic
-Neural networks aren't mysterious. They learn to do smart spectral editing - exactly what we're doing manually here.
+## Files
 
-### 2. Multi-Scale is Critical
-Single-scale analysis isn't enough. Vocals look different at different scales. The 18 slices capture this.
-
-### 3. Fingerprints Work
-If we can create a unique enough signature (765,000 points), we can identify and isolate specific sources.
-
-### 4. Encoder-Decoder Architecture
-Compression to bottleneck (abstract) → expansion back (detailed) is the key to successful separation.
+- `sanity_check.py` - phases 1-2 only (analysis, no output audio)
+- `sanity_check_complete.py` - full pipeline, 4.7 second snippet
+- `sanity_check_full_length.py` - full pipeline, entire song
+- `prepare_audio_files.py` - helper to convert your audio to the right format
+- `test_setup.py` - verify everything is installed correctly
+- `requirements.txt` - dependencies
 
 ## Troubleshooting
 
-### "FileNotFoundError: isolated_vocal.wav"
-→ Make sure audio files are in the same directory as the script
+**"FileNotFoundError"**
+Run `prepare_audio_files.py` first. It'll convert your audio files and put them in the right place.
 
-### "librosa not found"
-→ Run: `pip install librosa`
+**Takes forever**
+Use the complete version instead of full-length. Or reduce the number of iterations in the config.
 
-### "Takes too long"
-→ Reduce `duration` in CONFIG from 4.5 to 2.0 seconds
+**Out of memory**
+Reduce n_fft from 2048 to 1024 in the config.
 
-### "Too much memory"
-→ Reduce `n_fft` from 2048 to 1024
+**Results sound terrible**
+Make sure your input files are correct. The "Full" file should be the complete mix, and the "Acapella" file should be just the vocal. If they're swapped or wrong, it won't work.
 
-## Next Steps After Success
+## What This Proves
 
-1. **Document what worked**: Which slices were most discriminative?
-2. **Design U-Net architecture**: Use insights from sanity check
-3. **Gather training data**: Thousands of vocal+mix pairs
-4. **Train U-Net**: Learn optimal parameters
-5. **Compare results**: Sanity check (baseline) vs trained model
+If this works even a little bit, it means:
+1. Multi-scale spectral fingerprinting is a valid approach
+2. The encoder-decoder architecture makes sense
+3. U-Net should be able to learn this automatically
+4. Training a U-Net on this task is worth the effort
 
-## License
+If it doesn't work, then either the fingerprint isn't unique enough, or the optimization approach is wrong, or the whole concept is flawed. Better to find out in a few minutes of manual work than after days of training.
 
-MIT License - Feel free to use and modify
+## Next Steps
 
-## Credits
+Assuming this works:
+1. Figure out which slices were most useful
+2. Design a U-Net that mirrors this architecture
+3. Gather a dataset of thousands of (vocal, mixture) pairs
+4. Train the U-Net
+5. Compare trained model to this baseline
 
-### Based on the understanding that vocal separation is fundamentally a spectral fingerprinting problem, not magic AI.
+The trained model should be way better (95%+ quality) and way faster (10ms vs minutes).
+
+## Notes
+
+This is not production-ready. It's a proof of concept. For actual vocal separation use Spleeter or Demucs or something.
+
+The point is to understand what's actually happening before throwing a neural network at it. Makes the architecture decisions way more informed.

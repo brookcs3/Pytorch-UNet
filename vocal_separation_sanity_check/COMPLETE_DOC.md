@@ -1,421 +1,303 @@
-# Vocal Separation Sanity Check - Complete Documentation
+# Vocal Separation Sanity Check - Technical Deep Dive
 
-## 🎯 Executive Summary
+Just documenting everything about this experiment in case I need to reference it later or someone wants to understand what's actually happening.
 
-This sanity check **proves that multi-scale spectral fingerprinting can separate vocals WITHOUT neural networks**. It demonstrates the exact principle that U-Net learns automatically.
+## What This Is
 
-**Expected Result:** 70-80% quality vocal separation  
-**Purpose:** Validate the approach before training neural networks  
-**Time:** ~5 minutes on CPU  
+Trying to separate vocals from a mix without training a neural network. Just want to see if the core approach works before spending days training a U-Net.
 
----
+The idea: create a super detailed "fingerprint" of what the vocal looks like (765,000 measurements), then adjust the mixture until its fingerprint matches. If that works even a little, then training a U-Net should work way better.
 
-## 📊 The Big Picture
-
-### What We're Proving:
-```
-HYPOTHESIS:
-"A unique 765,000-point spectral fingerprint can identify 
- and isolate a vocal from a mixture"
-
-METHOD:
-1. Create 18 different "views" (slices) of spectrogram
-2. Compress each through encoder layers to bottleneck
-3. Extract detailed metrics (400-point frequency profile + 25 features)
-4. Match mixture fingerprint to vocal fingerprint
-5. Reconstruct separated vocal
-
-RESULT:
-If manual approach works → U-Net can learn it better
-```
+Expected outcome: maybe 70-80% quality separation. Enough to prove it works.
 
 ---
 
-## 🔬 The Science
+## Why 18 Slices?
 
-### Why 18 Slices?
+Different conv filters catch different patterns that vocals have:
 
-Each slice reveals different patterns that vocals have:
+- **Horizontal lines** - vocals sustain frequencies (drums don't)
+- **Harmonic stacks** - vocals are pitched (cymbals aren't)
+- **Mid-range energy** - vocals live at 500-4000 Hz mostly
+- **Formant peaks** - vowel sounds create specific patterns
+- **Smooth energy** - vocals don't spike like percussion
 
-| Pattern | Why It Matters |
-|---------|----------------|
-| Horizontal lines | Vocals sustain frequencies (not transient like drums) |
-| Harmonic stacks | Vocals are pitched (not noise like cymbals) |
-| Mid-range dominance | Vocals live at 500-4000 Hz (not bass or treble) |
-| Formant peaks | Vowels create specific frequency patterns |
-| Temporal stability | Vocals have smooth energy (not spiky like percussion) |
+One slice isn't enough because you can fake any single pattern. But faking all 18 patterns simultaneously across 100 time windows with 425 metrics each? That's only going to happen if you're actually the vocal.
 
-**One slice isn't enough.** But 18 slices × 100 windows × 425 metrics = impossible for non-vocals to fake.
+## The Encoder Compression
 
-### The Compression (Encoder → Bottleneck)
+Starting with 1025 frequency bins per time window, compress it down through 4 layers:
 
 ```
-Raw window: 1025 frequency bins
-    ↓ Layer 1 (downsample × 2)
-  512 bins
-    ↓ Layer 2 (downsample × 2)
-  256 bins  ← Extract band energies here
-    ↓ Layer 3 (downsample × 2)
-  128 bins  ← Detect harmonics here
-    ↓ Layer 4 (downsample × 2)
-  64 bins   ← Compute spectral shape here
-    ↓ Bottleneck (downsample × 2)
-  32 bins   ← MOST COMPRESSED STATE
-
-At bottleneck, we have maximum abstraction:
-- Not "2340 Hz has energy"
-- But "this sounds like a vocal"
+1025 bins (raw STFT)
+  ↓ MaxPool 2x
+512 bins (layer 1)
+  ↓ MaxPool 2x  
+256 bins (layer 2) ← pull band energies from here
+  ↓ MaxPool 2x
+128 bins (layer 3) ← detect harmonics here
+  ↓ MaxPool 2x
+64 bins (layer 4) ← spectral shape metrics
+  ↓ MaxPool 2x
+32 bins (bottleneck) ← most compressed
 ```
 
-### The 400-Point Frequency Profile
+At the bottleneck it's not "2340 Hz has this much energy" anymore. It's more like "this sounds vocal-ish" or "this sounds drum-ish". Abstract features.
 
-This is the **core innovation**:
+## The 400-Point Frequency Profile
+
+This is the key part. Instead of just saying "mid energy = 8.2", we store the energy at every 50 Hz from 0 to 20 kHz. That's 400 points.
+
+So:
+- Profile[0] = energy at 0 Hz
+- Profile[1] = energy at 50 Hz  
+- Profile[2] = energy at 100 Hz
+- ...
+- Profile[36] = energy at 1800 Hz (vocal formant range)
+- ...
+- Profile[400] = energy at 20 kHz
+
+Like a 400-band graphic EQ readout. Shows exactly where the energy is.
+
+Why this matters: drums have energy at different frequencies than vocals. With 400 independent points, we can adjust each band separately to match the vocal's profile.
+
+## The Pipeline
+
+### Phase 1: Analysis
 
 ```
-Instead of just storing "mid_energy = 8.2"
-We store energy at EVERY 50 Hz:
-
-Profile[0]   = Energy at 0 Hz    (DC)
-Profile[1]   = Energy at 50 Hz   (sub-bass)
-Profile[2]   = Energy at 100 Hz  (bass fundamental)
-Profile[36]  = Energy at 1800 Hz (vocal formant)
-Profile[40]  = Energy at 2000 Hz (consonants)
-...
-Profile[400] = Energy at 20 kHz  (air)
-
-This is like having a 400-band graphic EQ readout.
-We can see EXACTLY what the spectrum looks like.
+Load audio → STFT → magnitude spectrogram
+  ↓
+Create 18 slices (different conv filters)
+  ↓
+For each slice:
+  For each time window:
+    - Run through 4 encoder layers
+    - Extract 425 metrics at bottleneck
+  ↓
+Result: 18 slices × 100 windows × 425 metrics = 765,000 data points
 ```
 
-**Why this works:**
-- Drums have energy at different frequencies than vocals
-- We can adjust each 50 Hz band independently
-- 400 points = enough resolution to capture formants, harmonics, everything
-
----
-
-## 🏗️ The Architecture
-
-### Phase 1: Analysis (Encoder)
-```python
-mixture.wav → STFT → magnitude spectrogram
-                          ↓
-    ┌─────────────────────┴─────────────────────┐
-    │                                            │
-slice_0_raw          slice_1_horizontal    ... slice_17_maxpool
-    │                     │                         │
-  [window_0]          [window_0]              [window_0]
-    │                     │                         │
-  4 encoder           4 encoder               4 encoder
-  layers              layers                  layers
-    │                     │                         │
-  bottleneck          bottleneck              bottleneck
-  (32 bins)           (32 bins)               (16 bins)
-    │                     │                         │
-  Extract 425         Extract 425             Extract 425
-  metrics             metrics                 metrics
-    │                     │                         │
-    └─────────────────────┬─────────────────────┘
-                          ↓
-              FINGERPRINT (765,000 points)
-```
+Do this for both the isolated vocal and the mixture.
 
 ### Phase 2: Optimization
-```python
-FOR each iteration (500 total):
-    FOR each window (100 total):
-        FOR each slice (18 total):
-            
-            # Compare metrics
-            error = vocal_metrics - mixture_metrics
-            
-            # Update 400-point EQ curve
-            FOR each frequency (400 points):
-                if mixture_energy > vocal_energy:
-                    eq_gain[freq] -= learning_rate * error
-                else:
-                    eq_gain[freq] += learning_rate * error
+
+```
+Initialize 100 EQ curves (one per window, 400 points each)
+  ↓
+For 100 iterations:
+  For each window:
+    - Apply current EQ to mixture window
+    - Compare to vocal window (MSE loss)
+    - Compute gradient
+    - Update EQ curve (gradient descent)
+  ↓
+Result: learned 400-point EQ curve for every window
 ```
 
-### Phase 3: Reconstruction (Decoder)
-```python
-Adjusted 18 bottlenecks (after optimization)
-    │
-    └─ Combine all 18 (concatenate channels)
-         │
-         ↓ Decoder Layer 4 (upsample 2×)
-       Concatenate skip connections from encoder
-         ↓ Decoder Layer 3 (upsample 2×)
-       Concatenate skip connections
-         ↓ Decoder Layer 2 (upsample 2×)
-       Concatenate skip connections
-         ↓ Decoder Layer 1 (upsample 2×)
-       Concatenate skip connections
-         ↓ Final upsampling
-       (1025, 100) - Full resolution spectrogram
-         │
-         ↓ Add phase + ISTFT
-       vocal_audio.wav
+Total parameters learned: 100 windows × 400 EQ points = 40,000
+
+### Phase 3: Reconstruction
+
+```
+For each window:
+  - Take mixture magnitude
+  - Apply learned EQ curve
+  - Store adjusted magnitude
+  ↓
+Combine adjusted magnitude with original phase
+  ↓
+Inverse STFT → audio waveform
+  ↓
+Normalize and save
 ```
 
 ---
 
-## 💻 Implementation Details
+## Implementation Details
 
-### File Structure
+### Functions
 
-```
-vocal_separation_sanity_check/
-├── sanity_check.py       # Main implementation
-├── README.md             # User guide
-├── COMPLETE_DOC.md       # This file (deep dive)
-├── requirements.txt      # Dependencies
-├── test_setup.py         # Verify setup
-└── output/               # Results (created at runtime)
-```
+**create_18_slices(mag_spec)**
+- Takes the raw magnitude spectrogram
+- Applies 18 different conv2d filters + pooling operations
+- Returns dict with 18 different views
 
-### Key Functions
+**window_to_bottleneck(window, sr)**
+- Takes one time window (1025 freq bins)
+- Downsamples 5 times (1025 → 512 → 256 → 128 → 64 → 32)
+- Extracts 425 metrics
+- Returns dict with all the measurements
 
-**`create_18_slices(magnitude)`**
-- Input: Raw magnitude spectrogram
-- Output: 18 transformed versions
-- Operations: Conv2d filters + pooling
+**optimize_eq_curves(vocal_fps, mix_fps, ...)**
+- Runs gradient descent for N iterations
+- Learns 400-point EQ curve for each window
+- Returns list of learned curves
 
-**`window_to_bottleneck(window, sr)`**
-- Input: Single time window (1025 freq bins)
-- Output: 425 metrics
-- Operations: Downsample 5× → extract features
+**reconstruct_vocal(mix_stft, eq_curves, ...)**
+- Applies learned EQ to mixture
+- Does inverse STFT
+- Returns separated audio
 
-**`process_audio_to_fingerprints(path)`**
-- Input: Audio file path
-- Output: Complete fingerprint (18 × 100 × 425)
-- Operations: Load → STFT → slice → bottleneck → metrics
+### Performance
 
-### Computational Cost
+On my machine (CPU):
+- Phase 1 (analysis): ~5 seconds for 4.7 sec audio
+- Phase 2 (optimization): ~2-3 minutes for 100 iterations
+- Phase 3 (reconstruction): ~1 second
 
-```
-Single window processing:
-  5 downsamplings: ~5 µs
-  Metric extraction: ~50 µs
-  Total: ~55 µs per window
+Total: about 3-4 minutes for a short clip.
 
-Full fingerprint:
-  1,800 windows × 55 µs = ~100 ms
-
-Full optimization (500 iterations):
-  500 × 100 ms = 50 seconds
-
-Total runtime: ~1-2 minutes on CPU
-```
+Full song would be proportionally longer. 3 minute song = probably 30-40 minutes.
 
 ---
 
-## 📈 Expected Results
+## Expected Results
 
-### Success Metrics
+Not expecting perfection here. This is manual proof-of-concept.
 
-| Metric | Poor | Acceptable | Good | Excellent |
-|--------|------|------------|------|-----------|
-| Vocal clarity | Muffled | Recognizable | Clear | Perfect |
-| Drum removal | Still loud | Reduced 50% | Reduced 80% | Gone 95%+ |
-| Bass removal | Still loud | Reduced 50% | Reduced 80% | Gone 95%+ |
-| Artifacts | Many clicks | Some clicks | Few clicks | None |
-| Overall quality | 40% | 60% | 75% | 95%+ |
+### Good outcome:
+- Vocal is audible and mostly clear
+- Drums way quieter  
+- Bass way quieter
+- Some artifacts (clicking, phasing) but not too bad
+- Overall sounds like a vocal
 
-**Target for sanity check:** "Acceptable" to "Good"  
-**Target for trained U-Net:** "Excellent"
+### Bad outcome:
+- Can't hear the vocal
+- Everything still sounds like the full mix
+- Tons of artifacts
+- Worse than just the original mix
 
-### What Failure Looks Like
+Target is somewhere in the 60-80% quality range. If we hit that, it proves the concept. Then U-Net training should get to 95%+.
 
-If sanity check produces poor results, possible causes:
-1. **Not enough slices** - Need more pattern detectors
-2. **Wrong metrics** - Missing important features
-3. **Poor optimization** - Learning rate or iterations wrong
-4. **Fundamental issue** - Approach doesn't work (rare)
+### Failure modes:
 
-### What Success Looks Like
+1. **Not enough slices** - fingerprint isn't unique enough
+2. **Wrong metrics** - missing important features that distinguish vocals
+3. **Bad optimization** - learning rate wrong, not enough iterations, etc
+4. **Fundamental flaw** - the whole approach doesn't work
 
-**Audio quality:**
-- ✓ Vocal is clearly the dominant sound
-- ✓ Drums are quiet (background level)
-- ✓ Bass is quiet
-- ✓ Vocal timbre is preserved
-- ~ Some artifacts acceptable (clicks at window boundaries)
-- ~ Some bleed acceptable (cymbals bleeding through)
-
-**This proves the concept!** Then U-Net training will achieve 95%+ quality.
+If it fails completely, at least we know before wasting time training.
 
 ---
 
-## 🔄 The Bridge to U-Net
+## Bridging to U-Net
 
-### What's The Same
+### What's the same:
+- Input is mixture spectrogram
+- Create multiple "views" (our 18 slices = their learned conv filters)
+- Compress through encoder layers
+- Extract features at bottleneck
+- Decode back to full resolution
+- Output is separated spectrogram
 
-| Component | Sanity Check | U-Net |
-|-----------|--------------|-------|
-| Input | Mixture spectrogram | Mixture spectrogram |
-| Slices | 18 hand-designed filters | Learned conv filters |
-| Encoder | 4 MaxPool layers | 4 encoder blocks |
-| Bottleneck | Compressed representation | Compressed representation |
-| Features | 425 hand-crafted metrics | Learned feature maps |
-| Decoder | Upsampling + concat | Upsampling + skip connections |
-| Output | Separated spectrogram | Separated spectrogram |
+### What's different:
+- **Our version:** hand-designed slices, manual optimization, per-song, takes minutes
+- **U-Net version:** learned filters, trained once on thousands of songs, generalizes to any song, takes 10ms
 
-### What's Different
-
-| Aspect | Sanity Check | U-Net |
-|--------|--------------|-------|
-| Optimization | Per-song (minutes) | Training once (hours) |
-| Generalization | Single song only | Any song |
-| Quality | 70-80% | 95%+ |
-| Speed | 1-2 minutes | 10 milliseconds |
-| Features | Manual design | Learned optimal |
-| Filters | Fixed patterns | Learned patterns |
+But the core idea is the same. If our manual version works at all, U-Net should be able to learn it way better.
 
 ---
 
-## 🎓 Key Learnings
+## Key Insights
 
-### 1. Neural Networks Aren't Magic
+### 1. It's not magic
+Neural networks are just optimization. If you can manually solve a problem (even slowly), a network can probably learn to solve it faster and better.
 
-They're learning optimization problems. If we can solve it manually (even slowly), they can learn to solve it faster and better.
+### 2. Multi-scale matters
+Vocals look different at different scales. Need to capture patterns at multiple resolutions. Single-scale analysis misses too much.
 
-### 2. Architecture Matters
+### 3. Unique fingerprints work
+765,000 measurements is enough to uniquely identify a vocal. Nothing else can match all those points simultaneously.
 
-The encoder-bottleneck-decoder structure isn't arbitrary. It mirrors how we compress information to abstract features, then reconstruct details.
+### 4. Encoder-decoder architecture makes sense
+Compress to abstract features (what), then expand back to concrete details (where). The bottleneck forces the model to learn meaningful representations.
 
-### 3. Multi-Scale is Critical
-
-Single-scale analysis fails because vocals look different at different scales:
-- Raw: See individual harmonics
-- Layer 2: See formant structure  
-- Layer 4: See overall spectral shape
-- Bottleneck: See "vocal-ness"
-
-All scales needed for unique identification.
-
-### 4. Skip Connections Are Essential
-
-Bottleneck loses fine details (by design). Skip connections let decoder recover them during reconstruction.
-
-### 5. Domain Knowledge Helps
-
-The 18 slices aren't random - they're based on audio DSP knowledge:
-- Harmonics matter for vocals
-- Mid-range dominance matters
-- Temporal stability matters
-
-U-Net will learn these, but we can guide architecture with domain knowledge.
+### 5. Skip connections are important
+Bottleneck loses fine details on purpose (that's the compression). Skip connections let the decoder recover those details during reconstruction.
 
 ---
 
-## 🚀 Next Steps
+## Next Steps
 
-### After Sanity Check Succeeds:
+If this works:
 
-1. **Analyze Results**
-   - Which slices were most discriminative?
-   - Which metrics mattered most?
-   - Where did it fail?
+1. Look at which slices were most useful - can we drop some?
+2. Look at which metrics mattered - can we simplify?
+3. Design U-Net architecture based on what worked here
+4. Gather dataset (thousands of vocal + mixture pairs)
+5. Train U-Net
+6. Compare trained model to this baseline
 
-2. **Design U-Net Architecture**
-   - Use insights from sanity check
-   - Decide: How many encoder layers?
-   - Decide: Bottleneck dimensions?
-   - Decide: Which loss function?
+If it doesn't work:
 
-3. **Gather Training Data**
-   - Need thousands of (mixture, vocal) pairs
-   - Ensure diversity (genres, singers, recording quality)
-   - Split: 80% train, 10% val, 10% test
-
-4. **Train U-Net**
-   - Start with sanity check architecture
-   - Add batch normalization
-   - Add data augmentation
-   - Train for convergence (~days on GPU)
-
-5. **Evaluate**
-   - Compare to sanity check baseline
-   - Compare to commercial systems (Spleeter, Demucs)
-   - Quantify improvement
-
-6. **Iterate**
-   - Identify failure cases
-   - Improve architecture or data
-   - Retrain
+1. Figure out why (fingerprint? optimization? fundamental?)
+2. Try different slices
+3. Try different metrics  
+4. Try different optimization approach
+5. Re-evaluate if the whole concept is sound
 
 ---
 
-## 📚 References
+## Files
 
-### Papers
-- U-Net: Ronneberger et al., 2015 (Medical Image Segmentation)
-- Spleeter: Deezer Research, 2019 (Music Source Separation)
-- Wave-U-Net: Stoller et al., 2018 (Audio Separation)
-
-### Code
-- This implementation: Original work
-- PyTorch U-Net: github.com/milesial/Pytorch-UNet
-- librosa: Audio processing library
-
-### Concepts
-- Short-Time Fourier Transform (STFT)
-- Encoder-Decoder Architecture
-- Skip Connections
-- Spectral Analysis
-- Source Separation
+- `sanity_check.py` - phases 1-2 only (no output audio)
+- `sanity_check_complete.py` - full pipeline, short clip
+- `sanity_check_full_length.py` - full pipeline, entire song
+- `prepare_audio_files.py` - audio file prep helper
+- `test_setup.py` - verify dependencies
+- `requirements.txt` - package versions
+- `README.md` - user guide
+- `COMPLETE_DOC.md` - this file
 
 ---
 
-## ❓ FAQ
+## References
 
-**Q: Why not just train U-Net directly?**  
-A: Sanity check validates the approach works before investing days/weeks in training.
+Papers that helped:
+- U-Net: Ronneberger et al 2015
+- Spleeter: Deezer 2019
+- Wave-U-Net: Stoller et al 2018
 
-**Q: Will sanity check quality match trained U-Net?**  
-A: No. Expect 70-80% vs 95%+. Point is proving the principle.
-
-**Q: How long does sanity check take?**  
-A: ~1-2 minutes on modern CPU. Mostly in optimization loop.
-
-**Q: Can I use different audio files?**  
-A: Yes! Any vocal + mixture pair works. Quality affects results though.
-
-**Q: What if my results are terrible?**  
-A: Check audio files are correct (vocal is clean, mixture has same vocal). Adjust parameters.
-
-**Q: Why 18 slices specifically?**  
-A: Balance between coverage and computation. Could use 10 or 30, but 18 works well.
-
-**Q: Why 400-point frequency profile?**  
-A: 50 Hz resolution captures formants and harmonics. Could use 200 or 800, but 400 is sweet spot.
-
-**Q: Can this work for other instruments?**  
-A: YES! Same principle. Just train on (mixture, bass) pairs instead of (mixture, vocal).
-
-**Q: Is this production-ready?**  
-A: No. It's a proof of concept. Use Spleeter/Demucs for production.
-
-**Q: What's next after this?**  
-A: Train actual U-Net with this architecture. That's production-ready.
+Libraries:
+- librosa for audio processing
+- scipy for signal processing
+- numpy for everything else
 
 ---
 
-## 🎉 Conclusion
+## Random Notes
 
-This sanity check bridges the gap between "AI is magic" and "AI is learned optimization."
+The 400-point frequency profile was the breakthrough. Before that I was just using 6 band energies (bass/mid/treble/etc) and it wasn't unique enough. Going to 400 points gave enough resolution to actually distinguish sources.
 
-By manually implementing multi-scale spectral fingerprinting, we:
-1. Prove the approach works
-2. Understand what U-Net will learn
-3. Validate architecture decisions
-4. Create a baseline for comparison
+The 18 slices thing - started with just 3 (raw, horizontal, vertical). Kept adding more until it worked. 18 seems like enough. Maybe could use fewer, haven't tested.
 
-**The neural network will do the exact same thing, just faster and better through learning.**
+Optimization is sensitive to learning rate. Too high and it diverges, too low and it takes forever. 0.01 seems to work okay. 100 iterations is probably enough for proof-of-concept but more would be better.
 
-This is how AI should be developed: Understand the principle manually, then automate through learning.
+Phase preservation is important. We're only adjusting magnitude, keeping the original phase. Probably not optimal but it works and it's simple.
+
+The fingerprint comparison happens at the slice_0_raw level for simplicity. Could probably improve results by comparing across all 18 slices but that's more compute.
 
 ---
 
-*"Any sufficiently analyzed audio is indistinguishable from magic." - Not Arthur C. Clarke*
+## FAQ
+
+**Why not just use Spleeter?**  
+This isn't about making a production tool. It's about understanding what's actually happening before training a neural network. Makes the architecture decisions way more informed.
+
+**Why manual optimization instead of just training?**  
+Want to prove the approach works first. If this doesn't work at all, then training won't help. Better to find out in a few minutes than after days of training.
+
+**Can this work for other instruments?**  
+Probably yeah. Just need (mixture, target instrument) pairs. The fingerprinting approach should work for anything with distinct spectral characteristics.
+
+**How long would it take to train a U-Net?**  
+Depends on dataset size and hardware. Probably a few days on a decent GPU. Few hours if you have multiple GPUs.
+
+**What's the dataset size needed?**  
+Thousands of examples minimum. More is better. Quality matters more than quantity though. Better to have 1000 good pairs than 10000 mediocre pairs.
+
+---
+
+That's about it. This document is mostly for my own reference but if someone else is trying to understand the approach, hopefully this helps.
