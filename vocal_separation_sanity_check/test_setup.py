@@ -14,35 +14,35 @@ try:
     import numpy as np
     print("  ✓ numpy")
 except ImportError:
-    print("  ✗ numpy - run: pip install numpy")
+    print("  ✗ numpy - run: uv pip install numpy")
     sys.exit(1)
 
 try:
     import librosa
     print("  ✓ librosa")
 except ImportError:
-    print("  ✗ librosa - run: pip install librosa")
+    print("  ✗ librosa - run: uv pip install librosa")
     sys.exit(1)
 
 try:
     import soundfile as sf
     print("  ✓ soundfile")
 except ImportError:
-    print("  ✗ soundfile - run: pip install soundfile")
+    print("  ✗ soundfile - run: uv pip install soundfile")
     sys.exit(1)
 
 try:
     import scipy
     print("  ✓ scipy")
 except ImportError:
-    print("  ✗ scipy - run: pip install scipy")
+    print("  ✗ scipy - run: uv pip install scipy")
     sys.exit(1)
 
 try:
     import matplotlib
     print("  ✓ matplotlib")
 except ImportError:
-    print("  ✗ matplotlib - run: pip install matplotlib")
+    print("  ✗ matplotlib - run: uv pip install matplotlib")
     sys.exit(1)
 
 # Test file existence

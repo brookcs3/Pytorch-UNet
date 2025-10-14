@@ -47,9 +47,9 @@ See [vocal_separation_sanity_check/README.md](vocal_separation_sanity_check/READ
 
 ### U-Net
 
-Install stuff:
+Install dependencies:
 ```bash
-pip install torch torchvision numpy librosa soundfile scipy matplotlib
+uv pip install torch torchvision numpy librosa soundfile scipy matplotlib
 ```
 
 Test it works:

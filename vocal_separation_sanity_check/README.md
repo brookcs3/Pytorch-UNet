@@ -22,9 +22,9 @@ If the fingerprint is unique enough, the only way the mixture can match it is to
 
 ## Setup
 
-Need these:
+Install dependencies:
 ```bash
-pip install numpy librosa soundfile scipy matplotlib
+uv pip install numpy librosa soundfile scipy matplotlib
 ```
 
 ## Adding Your Audio Files
