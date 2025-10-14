@@ -4,7 +4,7 @@ Audio File Preparation Script
 This script will:
 1. Find your audio files in the process/ directories
 2. Convert them to the right format
-3. Move them to the correct location with correct names
+3. Move them to rtg/ (ready-to-go) directories
 
 Place your files in:
 - process/100-window/ for short version (files named *_100-full.wav and *_100-stem.wav)
@@ -25,7 +25,12 @@ print("="*70)
 BASE_DIR = Path(__file__).parent
 PROCESS_100_DIR = BASE_DIR / "process" / "100-window"
 PROCESS_NL_DIR = BASE_DIR / "process" / "no-limit"
-TARGET_DIR = BASE_DIR
+RTG_100_DIR = BASE_DIR / "rtg" / "100-window"
+RTG_NL_DIR = BASE_DIR / "rtg" / "no-limit"
+
+# Create rtg directories if they don't exist
+RTG_100_DIR.mkdir(parents=True, exist_ok=True)
+RTG_NL_DIR.mkdir(parents=True, exist_ok=True)
 
 # Config
 TARGET_SR = 22050  # Sample rate
@@ -103,7 +108,7 @@ def prepare_file(source_path, target_path, target_duration, file_type):
     
     # Save
     sf.write(str(target_path), audio, TARGET_SR)
-    print(f"\n  ✓ Saved to: {target_path.name}")
+    print(f"\n  ✓ Saved to: {target_path}")
     
     return True
 
@@ -138,16 +143,16 @@ if full_100 and stem_100:
     print("="*70)
     
     # Process with 4.7 second duration
-    vocal_ok = prepare_file(stem_100, TARGET_DIR / "isolated_vocal.wav", 4.7, "Isolated Vocal (100-window)")
-    mixture_ok = prepare_file(full_100, TARGET_DIR / "stereo_mixture.wav", 4.7, "Full Mixture (100-window)")
+    vocal_ok = prepare_file(stem_100, RTG_100_DIR / "isolated_vocal.wav", 4.7, "Isolated Vocal (100-window)")
+    mixture_ok = prepare_file(full_100, RTG_100_DIR / "stereo_mixture.wav", 4.7, "Full Mixture (100-window)")
     
     if vocal_ok and mixture_ok:
         print("\n" + "="*70)
         print("✓ SUCCESS - 100-window files ready!")
         print("="*70)
-        print("\nPrepared files:")
-        print(f"  {TARGET_DIR / 'isolated_vocal.wav'}")
-        print(f"  {TARGET_DIR / 'stereo_mixture.wav'}")
+        print("\nPrepared files in rtg/100-window/:")
+        print(f"  {RTG_100_DIR / 'isolated_vocal.wav'}")
+        print(f"  {RTG_100_DIR / 'stereo_mixture.wav'}")
         print("\nRun:")
         print("  python sanity_check_complete.py")
 
@@ -157,16 +162,16 @@ elif full_nl and stem_nl:
     print("="*70)
     
     # Process without duration limit
-    vocal_ok = prepare_file(stem_nl, TARGET_DIR / "isolated_vocal.wav", None, "Isolated Vocal (no-limit)")
-    mixture_ok = prepare_file(full_nl, TARGET_DIR / "stereo_mixture.wav", None, "Full Mixture (no-limit)")
+    vocal_ok = prepare_file(stem_nl, RTG_NL_DIR / "isolated_vocal.wav", None, "Isolated Vocal (no-limit)")
+    mixture_ok = prepare_file(full_nl, RTG_NL_DIR / "stereo_mixture.wav", None, "Full Mixture (no-limit)")
     
     if vocal_ok and mixture_ok:
         print("\n" + "="*70)
         print("✓ SUCCESS - No-limit files ready!")
         print("="*70)
-        print("\nPrepared files:")
-        print(f"  {TARGET_DIR / 'isolated_vocal.wav'}")
-        print(f"  {TARGET_DIR / 'stereo_mixture.wav'}")
+        print("\nPrepared files in rtg/no-limit/:")
+        print(f"  {RTG_NL_DIR / 'isolated_vocal.wav'}")
+        print(f"  {RTG_NL_DIR / 'stereo_mixture.wav'}")
         print("\nRun:")
         print("  python sanity_check_full_length.py")
 

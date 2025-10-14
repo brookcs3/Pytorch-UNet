@@ -38,8 +38,8 @@ print("This will take longer but processes the complete audio.\n")
 # ============================================
 
 CONFIG = {
-    'vocal_path': 'isolated_vocal.wav',
-    'mixture_path': 'stereo_mixture.wav',
+    'vocal_path': 'rtg/no-limit/isolated_vocal.wav',
+    'mixture_path': 'rtg/no-limit/stereo_mixture.wav',
     'output_dir': 'output_full',
     'sr': 22050,
     'duration': None,  # Process ENTIRE song

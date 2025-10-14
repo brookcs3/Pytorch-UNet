@@ -40,8 +40,8 @@ print("can separate sources WITHOUT neural network training.\n")
 # ============================================
 
 CONFIG = {
-    'vocal_path': 'isolated_vocal.wav',
-    'mixture_path': 'stereo_mixture.wav',
+    'vocal_path': 'rtg/100-window/isolated_vocal.wav',
+    'mixture_path': 'rtg/100-window/stereo_mixture.wav',
     'output_dir': 'output',
     'sr': 22050,
     'duration': 4.7,  # Ensures exactly 100 windows at hop_length=1024
