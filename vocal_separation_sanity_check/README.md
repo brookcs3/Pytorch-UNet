@@ -155,7 +155,7 @@ With 18 slices and ~100 windows per slice, that's around 765,000 data points des
    (name them correctly: *_100-full.wav + *_100-stem.wav OR *_nl-full.wav + *_nl-stem.wav)
 
 2. Run: python prepare_audio_files.py
-   (converts and moves files to the right place)
+   (converts and moves files to rtg/100-window/ or rtg/no-limit/)
 
 3. Run: python sanity_check_complete.py (for 100-window)
    OR:  python sanity_check_full_length.py (for no-limit)

@@ -12,7 +12,6 @@ Old U-Net implementation from the 2017 Kaggle Carvana Image Masking Challenge. S
 - **[Vocal Separation Guide](vocal_separation_sanity_check/README.md)** - How to use the vocal separation experiments
 - **[Technical Details](vocal_separation_sanity_check/COMPLETE_DOC.md)** - Deep dive into how it works
 - **[Audio Setup Guide](AUDIO_SETUP_GUIDE.md)** - Help with audio file preparation
-- **[Push to GitHub](PUSH_TO_GITHUB.md)** - Instructions for sharing this repo
 
 ---
 
@@ -152,14 +151,15 @@ else:
 - `vocal_separation_sanity_check/` - proof-of-concept experiments
   - `process/100-window/` - place your files here for quick test
   - `process/no-limit/` - place your files here for full song
-  - `prepare_audio_files.py` - processes and moves your files
+  - `rtg/100-window/` - processed files ready-to-go (100-window)
+  - `rtg/no-limit/` - processed files ready-to-go (no-limit)
+  - `prepare_audio_files.py` - processes and moves your files to rtg/
   - `sanity_check_complete.py` - runs 100-window version
   - `sanity_check_full_length.py` - runs full-song version
   - `test_setup.py` - verify installation
   - `README.md` - detailed usage guide
   - `COMPLETE_DOC.md` - technical deep dive
 - `AUDIO_SETUP_GUIDE.md` - guide for setting up audio files
-- `PUSH_TO_GITHUB.md` - sharing instructions
 
 ---
 
@@ -176,10 +176,6 @@ Manual implementation of what U-Net should learn:
 Takes a few minutes, gets 70-80% quality. Proves the concept works.
 
 Then train U-Net to do it automatically in 10ms at 95%+ quality.
-
----
-
-- 
 
 ---
 

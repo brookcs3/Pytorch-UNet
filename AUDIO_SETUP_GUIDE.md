@@ -1,179 +1,131 @@
 # 🎵 Audio File Setup Guide
 
-## Your Files
+Quick guide for setting up your audio files for the vocal separation sanity check.
 
-You have:
-- `Intergalactic_Acapella.wav` - Isolated vocal (acapella)
-- `Intergalactic_Stereo.wav` - Full stereo mix
+## What You Need
 
-Location: `/Users/cameronbrooks/kaggle/Pytorch-UNet/`
+Two versions of the same song:
+1. **Acapella/Stem version** - Just the vocals (or whatever stem you want to separate)
+2. **Full mix version** - Complete song with all instruments
 
-## What the Sanity Check Needs
+Both must be:
+- The same song
+- Perfectly time-aligned (critical!)
+- Any format (MP3, WAV, FLAC, etc - the script converts)
 
-The files need to be:
-1. **Format**: Mono (1 channel), 22050 Hz, WAV
-2. **Duration**: 4.5 seconds
-3. **Names**: 
-   - `isolated_vocal.wav` (your acapella)
-   - `stereo_mixture.wav` (your stereo mix)
-4. **Location**: `vocal_separation_sanity_check/` directory
+## Finding Audio
 
----
+**Where to get acapellas:**
+- Soulseek (https://www.slsknet.org) - great for finding acapellas
+- YouTube rips (use youtube-dl or similar)
+- Official acapella releases
+- Rap songs often have acapella versions available
 
-## Quick Setup (3 Steps)
+## Aligning Your Tracks (CRITICAL STEP)
 
-### Step 1: Install Dependencies
+Your tracks MUST start at the exact same time. Use Audacity (free) or any DAW:
 
-```bash
-cd /Users/cameronbrooks/kaggle/Pytorch-UNet
-pip install librosa soundfile numpy scipy matplotlib
+### In Audacity:
+1. **Import both tracks** - File → Import → Audio
+2. **Zoom way in** - Ctrl/Cmd + 1 (keep zooming)
+3. **Find a sharp transient** - Look for a snare hit, vocal consonant, anything both tracks share
+4. **Align them** - Click and drag one track horizontally until the transients line up perfectly
+   - Use the Time Shift Tool (F5)
+   - Don't stretch or speed-change, just slide horizontally
+5. **Select the aligned section** - Click and drag to set In/Out markers
+   - For 100-window version: Select 4.7 seconds
+   - For no-limit version: Select whatever length you want
+6. **Export** - File → Export → Export Selected Audio
+   - Export both tracks separately
+   - Save as WAV
+
+### Verify alignment:
+1. Re-import both exported files
+2. Select one track → Effect → Invert
+3. Play both together
+4. Should mostly cancel out (near silence) if perfectly aligned
+
+## File Naming
+
+**For quick test (100-window, 4.7 seconds):**
+- `yourname_100-full.wav` - Full mix
+- `yourname_100-stem.wav` - Acapella/stem
+
+**For full song (no-limit):**
+- `yourname_nl-full.wav` - Full mix
+- `yourname_nl-stem.wav` - Acapella/stem
+
+Examples:
+```
+intergalactic_100-full.wav
+intergalactic_100-stem.wav
+
+mysong_nl-full.wav
+mysong_nl-stem.wav
 ```
 
-### Step 2: Prepare Your Audio Files
+The name before the suffix doesn't matter, just needs to match for both files.
 
-Save this script as `prepare_audio.py` in the Pytorch-UNet directory:
+## Where to Put Files
 
-```python
-import librosa
-import soundfile as sf
-import numpy as np
-from pathlib import Path
+Place your named files in:
+- `vocal_separation_sanity_check/process/100-window/` for quick test
+- `vocal_separation_sanity_check/process/no-limit/` for full song
 
-# Your source files
-ACAPELLA = "Intergalactic_Acapella.wav"
-STEREO = "Intergalactic_Stereo.wav"
-
-# Target directory and names
-TARGET_DIR = Path("vocal_separation_sanity_check")
-TARGET_DIR.mkdir(exist_ok=True)
-
-def prepare_file(source_name, target_name):
-    print(f"\nProcessing {source_name}...")
-    
-    # Load (converts to mono automatically with mono=True)
-    audio, sr = librosa.load(source_name, sr=22050, duration=4.5, mono=True)
-    
-    # Normalize
-    audio = audio / np.max(np.abs(audio))
-    
-    # Save
-    target_path = TARGET_DIR / target_name
-    sf.write(target_path, audio, 22050)
-    
-    print(f"  ✓ Saved to {target_path}")
-    print(f"    Duration: {len(audio)/22050:.2f}s, SR: 22050 Hz, Mono")
-
-# Process both files
-prepare_file(ACAPELLA, "isolated_vocal.wav")
-prepare_file(STEREO, "stereo_mixture.wav")
-
-print("\n✓ Done! Files are ready in vocal_separation_sanity_check/")
-```
-
-Then run it:
-```bash
-python prepare_audio.py
-```
-
-### Step 3: Verify Setup
+## Running the Preparation Script
 
 ```bash
 cd vocal_separation_sanity_check
-python test_setup.py
+python prepare_audio_files.py
 ```
 
-If you see "✓ ALL TESTS PASSED!", you're ready!
+This will:
+- Find your files based on the naming
+- Convert to mono, 22050 Hz
+- Trim to 4.7 seconds (for 100-window) or keep full length (for no-limit)
+- Normalize volume
+- Save to `rtg/100-window/` or `rtg/no-limit/` as ready-to-go files
 
----
+## Running the Sanity Check
 
-## Alternative: Manual Conversion (Using Audacity/ffmpeg)
-
-### Using ffmpeg:
-```bash
-# Convert acapella
-ffmpeg -i Intergalactic_Acapella.wav -ar 22050 -ac 1 -t 4.5 vocal_separation_sanity_check/isolated_vocal.wav
-
-# Convert stereo mix  
-ffmpeg -i Intergalactic_Stereo.wav -ar 22050 -ac 1 -t 4.5 vocal_separation_sanity_check/stereo_mixture.wav
-```
-
-### Using Audacity:
-1. Open each file in Audacity
-2. **Tracks menu** → Convert to Mono (if stereo)
-3. **Select all** (Ctrl/Cmd+A)
-4. **Effect** → Change Speed/Pitch (set to 22050 Hz if needed)
-5. Trim to 4.5 seconds (0:00.000 to 0:04.500)
-6. **File** → Export → Export as WAV
-7. Save with correct name in `vocal_separation_sanity_check/`
-
----
-
-## Check If Files Are Ready
-
-Run this in Python:
-
-```python
-import librosa
-
-# Check vocal
-v, sr_v = librosa.load('vocal_separation_sanity_check/isolated_vocal.wav', sr=None)
-print(f"Vocal: {len(v)/sr_v:.2f}s, {sr_v} Hz, {v.ndim} channel(s)")
-
-# Check mixture
-m, sr_m = librosa.load('vocal_separation_sanity_check/stereo_mixture.wav', sr=None)
-print(f"Mix:   {len(m)/sr_m:.2f}s, {sr_m} Hz, {m.ndim} channel(s)")
-
-# Should see:
-# Vocal: 4.50s, 22050 Hz, 1 channel(s)
-# Mix:   4.50s, 22050 Hz, 1 channel(s)
-```
-
----
-
-## Common Issues
-
-### "No such file or directory"
-- Make sure you're in `/Users/cameronbrooks/kaggle/Pytorch-UNet/`
-- Make sure your wav files are in this directory
-- Check spelling: `Intergalactic_Acapella.wav` (capital I, underscore, capital A)
-
-### "librosa not found"
-```bash
-pip install librosa
-```
-
-### Files are too short/long
-The script will automatically trim or pad to 4.5 seconds. If your files are much shorter than 4.5 seconds, consider using a longer duration by editing the script.
-
-### Stereo files
-The script converts to mono automatically. This is correct - we want mono for the sanity check.
-
----
-
-## Next Steps
-
-Once files are ready:
+After preparation:
 
 ```bash
-cd vocal_separation_sanity_check
+# For 100-window version (~3 min runtime)
+python sanity_check_complete.py
 
-# Test everything works
-python test_setup.py
-
-# Run sanity check!
-python sanity_check.py
+# For no-limit version (longer runtime)
+python sanity_check_full_length.py
 ```
 
-Expected output:
-```
-PHASE 1: LOAD AND ANALYZE
-  ✓ Created 18 slices, 1,800 total windows
-  ✓ Total metrics: 765,000
+Check output in `output/` or `output_full/`.
 
-PHASE 2: COMPARE FINGERPRINTS
-  Window 0 comparison shows differences
+## Troubleshooting
 
-✓ Fingerprints created
-```
+**"NO FILES FOUND"**
+- Check your files are in the right directory
+- Check file names end with correct suffixes
+- Run `ls process/100-window/` or `ls process/no-limit/` to see what's there
 
-This proves the multi-scale spectral fingerprinting works!
+**"Files don't match"**
+- Make sure both files are the same duration
+- Check they're properly aligned
+
+**"Bad audio quality"**
+- Source files might be too low quality
+- Try finding better quality versions (320kbps MP3 or lossless)
+
+**"Takes too long"**
+- Use 100-window version for quick tests
+- Full song processing can take 30+ minutes
+
+## Quick Workflow Summary
+
+1. Find acapella + full mix of same song
+2. Align them perfectly in Audacity
+3. Export aligned sections
+4. Name with correct suffixes (_100-full/_100-stem or _nl-full/_nl-stem)
+5. Put in process/100-window/ or process/no-limit/
+6. Run `python prepare_audio_files.py`
+7. Run sanity check script
+8. Check output directory for results
