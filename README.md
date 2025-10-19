@@ -43,8 +43,14 @@ Audio spectrograms are 2D images. U-Net can learn to separate vocals from backgr
 
 Before training, verify PyTorch is installed and working:
 
+**Mac/Linux:**
 ```bash
 python3 test_pytorch.py
+```
+
+**Windows:**
+```powershell
+python test_pytorch.py
 ```
 
 **Expected output:**
@@ -149,6 +155,7 @@ This is what U-Net does internally - creates tensors, does math on them, reshape
 
 Now test the actual U-Net model with random data:
 
+**Mac/Linux:**
 ```bash
 python3 -c "
 from unet import UNet
@@ -175,6 +182,11 @@ print(f'\n✅ U-Net working on {device}!')
 "
 ```
 
+**Windows:**
+```powershell
+python -c "from unet import UNet; import torch; print('📥 INPUT:'); x = torch.randn(1, 3, 572, 572); print(f'   Shape: {x.shape}'); print(f'   Min: {x.min():.3f}, Max: {x.max():.3f}'); print('\n⚙️  Processing...'); device = torch.device('cuda' if torch.cuda.is_available() else 'cpu'); model = UNet(n_channels=3, n_classes=2).to(device); model.eval(); output = model(x.to(device)); print('\n📤 OUTPUT:'); print(f'   Shape: {output.shape}'); print(f'   Min: {output.min():.3f}, Max: {output.max():.3f}'); print(f'\n✅ U-Net working!')"
+```
+
 **What you'll see:**
 - Input: Random 3-channel image (572×572)
 - Output: 2-channel prediction (same size)
@@ -184,6 +196,7 @@ print(f'\n✅ U-Net working on {device}!')
 
 Test the forward and backward pass (what happens during training):
 
+**Mac/Linux:**
 ```bash
 python3 -c "
 import torch
@@ -216,6 +229,11 @@ print('✅ Training pipeline fully functional!')
 "
 ```
 
+**Windows:**
+```powershell
+python -c "import torch; from unet import UNet; from PIL import Image; import numpy as np; print('📂 Loading...'); img = np.array(Image.open('data/imgs/test_0.png')); mask = np.array(Image.open('data/masks/test_0_mask.png')); device = torch.device('cuda' if torch.cuda.is_available() else 'cpu'); model = UNet(n_channels=3, n_classes=2).to(device); img_t = torch.from_numpy(img).permute(2,0,1).unsqueeze(0).float().to(device)/255.0; mask_t = torch.from_numpy(mask).unsqueeze(0).long().to(device)//255; print('⚡ Forward...'); output = model(img_t); criterion = torch.nn.CrossEntropyLoss(); loss = criterion(output, mask_t); print(f'Loss: {loss.item():.4f}'); loss.backward(); print('✅ Pipeline works!')"
+```
+
 **What this shows:**
 - Loads real car image + mask
 - Forward pass: image → U-Net → prediction
@@ -226,6 +244,7 @@ print('✅ Training pipeline fully functional!')
 
 Run a tiny training session to see the complete cycle:
 
+**Mac/Linux:**
 ```bash
 python3 -c "
 import torch
@@ -262,6 +281,11 @@ print('   (This is fake training - use train.py for real training)')
 "
 ```
 
+**Windows:**
+```powershell
+python -c "import torch; from unet import UNet; print('🔧 Setup...'); device = torch.device('cuda' if torch.cuda.is_available() else 'cpu'); model = UNet(n_channels=3, n_classes=2).to(device); optimizer = torch.optim.Adam(model.parameters(), lr=1e-4); criterion = torch.nn.CrossEntropyLoss(); x = torch.rand(1,3,256,256).to(device); y = torch.randint(0,2,(1,256,256)).to(device); print('\n🏋️  Training...'); [print(f'Epoch {e+1}/10 - Loss: {(model.train(), optimizer.zero_grad(), loss := criterion(model(x), y), loss.backward(), optimizer.step(), loss.item())[5]:.4f}') for e in range(10)]; torch.save(model.state_dict(), 'mini_unet.pth'); print('\n✅ Saved as mini_unet.pth')"
+```
+
 **What you learned:**
 - Complete training cycle: forward → loss → backward → update
 - Loss decreases as model learns
@@ -273,8 +297,14 @@ print('   (This is fake training - use train.py for real training)')
 
 Train U-Net to segment cars from images:
 
+**Mac/Linux:**
 ```bash
 python3 train.py --epochs 10 --batch-size 2 --validation 20
+```
+
+**Windows:**
+```powershell
+python train.py --epochs 10 --batch-size 2 --validation 20
 ```
 
 **What happens:**
@@ -396,9 +426,16 @@ Foreground pixels: 22.3%
 
 ### Adjust Epochs
 
+**Mac/Linux:**
 ```bash
 python3 train.py --epochs 5   # Quick test (less accurate)
 python3 train.py --epochs 50  # Longer training (more accurate)
+```
+
+**Windows:**
+```powershell
+python train.py --epochs 5   # Quick test (less accurate)
+python train.py --epochs 50  # Longer training (more accurate)
 ```
 
 **What epochs control:**
@@ -408,9 +445,16 @@ python3 train.py --epochs 50  # Longer training (more accurate)
 
 ### Adjust Batch Size
 
+**Mac/Linux:**
 ```bash
 python3 train.py --batch-size 1  # Process 1 image at a time
 python3 train.py --batch-size 4  # Process 4 images at a time
+```
+
+**Windows:**
+```powershell
+python train.py --batch-size 1  # Process 1 image at a time
+python train.py --batch-size 4  # Process 4 images at a time
 ```
 
 **What batch size controls:**
@@ -495,7 +539,11 @@ uv pip install torch torchvision
 **"CUDA out of memory"**
 Reduce batch size:
 ```bash
+# Mac/Linux
 python3 train.py --batch-size 1
+
+# Windows
+python train.py --batch-size 1
 ```
 
 **"FileNotFoundError: data/imgs/"**
@@ -506,7 +554,7 @@ ls data/imgs/  # Should show image files
 ```
 
 **Training loss not decreasing**
-- Try more epochs: `--epochs 50`
+- Try more epochs: `python3 train.py --epochs 50` (Mac/Linux) or `python train.py --epochs 50` (Windows)
 - Check learning rate in `train.py` (should be ~0.001)
 - Verify data is loading correctly
 
