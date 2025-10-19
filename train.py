@@ -55,11 +55,12 @@ def train_model(
     val_loader = DataLoader(val_set, shuffle=False, drop_last=True, **loader_args)
 
     # (Initialize logging)
-    experiment = wandb.init(project='U-Net', resume='allow', anonymous='must')
-    experiment.config.update(
-        dict(epochs=epochs, batch_size=batch_size, learning_rate=learning_rate,
-             val_percent=val_percent, save_checkpoint=save_checkpoint, img_scale=img_scale, amp=amp)
-    )
+    # experiment = wandb.init(project='PyTorch-UNet-Stem-Separation', resume='allow')
+    experiment = None  # Disabled wandb logging
+    # experiment.config.update(
+    #     dict(epochs=epochs, batch_size=batch_size, learning_rate=learning_rate,
+    #          val_percent=val_percent, save_checkpoint=save_checkpoint, img_scale=img_scale, amp=amp)
+    # )
 
     logging.info(f'''Starting training:
         Epochs:          {epochs}
@@ -121,11 +122,12 @@ def train_model(
                 pbar.update(images.shape[0])
                 global_step += 1
                 epoch_loss += loss.item()
-                experiment.log({
-                    'train loss': loss.item(),
-                    'step': global_step,
-                    'epoch': epoch
-                })
+                if experiment:
+                    experiment.log({
+                        'train loss': loss.item(),
+                        'step': global_step,
+                        'epoch': epoch
+                    })
                 pbar.set_postfix(**{'loss (batch)': loss.item()})
 
                 # Evaluation round
@@ -133,32 +135,34 @@ def train_model(
                 if division_step > 0:
                     if global_step % division_step == 0:
                         histograms = {}
-                        for tag, value in model.named_parameters():
-                            tag = tag.replace('/', '.')
-                            if not (torch.isinf(value) | torch.isnan(value)).any():
-                                histograms['Weights/' + tag] = wandb.Histogram(value.data.cpu())
-                            if not (torch.isinf(value.grad) | torch.isnan(value.grad)).any():
-                                histograms['Gradients/' + tag] = wandb.Histogram(value.grad.data.cpu())
+                        if experiment:
+                            for tag, value in model.named_parameters():
+                                tag = tag.replace('/', '.')
+                                if not (torch.isinf(value) | torch.isnan(value)).any():
+                                    histograms['Weights/' + tag] = wandb.Histogram(value.data.cpu())
+                                if not (torch.isinf(value.grad) | torch.isnan(value.grad)).any():
+                                    histograms['Gradients/' + tag] = wandb.Histogram(value.grad.data.cpu())
 
                         val_score = evaluate(model, val_loader, device, amp)
                         scheduler.step(val_score)
 
                         logging.info('Validation Dice score: {}'.format(val_score))
-                        try:
-                            experiment.log({
-                                'learning rate': optimizer.param_groups[0]['lr'],
-                                'validation Dice': val_score,
-                                'images': wandb.Image(images[0].cpu()),
-                                'masks': {
-                                    'true': wandb.Image(true_masks[0].float().cpu()),
-                                    'pred': wandb.Image(masks_pred.argmax(dim=1)[0].float().cpu()),
-                                },
-                                'step': global_step,
-                                'epoch': epoch,
-                                **histograms
-                            })
-                        except:
-                            pass
+                        if experiment:
+                            try:
+                                experiment.log({
+                                    'learning rate': optimizer.param_groups[0]['lr'],
+                                    'validation Dice': val_score,
+                                    'images': wandb.Image(images[0].cpu()),
+                                    'masks': {
+                                        'true': wandb.Image(true_masks[0].float().cpu()),
+                                        'pred': wandb.Image(masks_pred.argmax(dim=1)[0].float().cpu()),
+                                    },
+                                    'step': global_step,
+                                    'epoch': epoch,
+                                    **histograms
+                                })
+                            except:
+                                pass
 
         if save_checkpoint:
             Path(dir_checkpoint).mkdir(parents=True, exist_ok=True)
@@ -166,6 +170,19 @@ def train_model(
             state_dict['mask_values'] = dataset.mask_values
             torch.save(state_dict, str(dir_checkpoint / 'checkpoint_epoch{}.pth'.format(epoch)))
             logging.info(f'Checkpoint {epoch} saved!')
+
+    # Training complete
+    logging.info('Training completed successfully!')
+
+    # Clean up any remaining tqdm progress bars
+    try:
+        import tqdm
+        # Close any remaining progress bars
+        tqdm.tqdm._instances.clear()
+    except:
+        pass
+
+    return model
 
 
 def get_args():
@@ -203,8 +220,10 @@ if __name__ == '__main__':
     # Change here to adapt to your data
     # n_channels=3 for RGB images
     # n_classes is the number of probabilities you want to get per pixel
+    # Force CPU to avoid MPS issues
+    device = torch.device('cpu')
     model = UNet(n_channels=3, n_classes=args.classes, bilinear=args.bilinear)
-    model = model.to(memory_format=torch.channels_last)
+    model = model.to(device)
 
     logging.info(f'Network:\n'
                  f'\t{model.n_channels} input channels\n'
@@ -242,14 +261,19 @@ if __name__ == '__main__':
 
             model.use_checkpointing()
             train_model(
-                model=model,
-                epochs=args.epochs,
-                batch_size=args.batch_size,
-                learning_rate=args.lr,
-                device=device,
-                img_scale=args.scale,
-                val_percent=args.val / 100,
-                amp=args.amp
+            model=model,
+            epochs=args.epochs,
+            batch_size=args.batch_size,
+            learning_rate=args.lr,
+            device=device,
+            img_scale=args.scale,
+            val_percent=args.val / 100,
+            amp=args.amp
             )
-        else:
+            else:
             raise
+
+    # Ensure clean exit
+    print("\n🎉 Training finished successfully!")
+    import sys
+    sys.exit(0)
